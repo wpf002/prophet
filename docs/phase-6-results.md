@@ -39,18 +39,26 @@ POST /forecast {"series_id":"AAPL","horizon":50}               -> 400
 GET  /health                                                   -> 200
 ```
 
-## What's left (external / time-bound)
+## Deploy & monitoring scaffolding (built)
 
-1. **Deploy to Railway.** Prophet needs a Dockerfile + `railway.toml` (start:
-   `uvicorn prophet.api.main:app`). The model artifact and its data are gitignored,
-   so the image must either bake in a release-time `ingest_market` + `train_production`
-   step (needs the Alpaca keys as Railway vars) or load the artifact from object
-   storage / the MLflow registry on startup.
-2. **30 days of forecast-vs-actual.** Log every served forecast to `forecasts`,
-   record realized values into `actuals`, run the nightly join, and accumulate the
-   rolling-accuracy history. This is calendar time, not code.
-3. **Dashboard.** A small Streamlit/Next.js page over `ROLLING_ACCURACY_SQL`
-   (rolling MASE + coverage + latest drift status).
+- **Railway deploy.** `Dockerfile` (installs `libgomp1` for LightGBM, uv-frozen
+  deps), `.dockerignore`, `railway.toml` (healthcheck `/health`), and
+  `scripts/entrypoint.sh` — on boot it ingests data + trains the model if the
+  artifact is absent, then serves. Set `APCA_API_KEY_ID`/`APCA_API_SECRET_KEY`
+  (+ optional `PROPHET_TICKERS`, `PROPHET_MONITOR_DSN`) as Railway vars and push.
+- **Forecast-vs-actual logging.** `/forecast` logs each served forecast to the
+  `forecasts` table in a background task when `PROPHET_MONITOR_DSN` is set
+  (non-fatal). `scripts/record_actuals.py` (run on a Railway cron) re-fetches
+  market data, upserts `actuals`, and reports rolling accuracy + coverage.
+- **Dashboard.** `dashboard/app.py` (Streamlit, optional `dashboard` extra) over
+  `ROLLING_ACCURACY_SQL`: per-series MAE, 95% coverage, pair counts.
+  `uv run --extra dashboard streamlit run dashboard/app.py`.
+
+## What's genuinely left (time-bound, not code)
+
+1. **Run the deploy** — `railway up` with the env vars above (your account).
+2. **30 days of accumulation** — let the forecast/actual loop run; calendar time.
+3. The plain-language accuracy report then falls out of the dashboard.
 
 ## Honest caveats
 

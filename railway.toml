@@ -1,0 +1,16 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Required env vars (set in the Railway dashboard):
+#   APCA_API_KEY_ID, APCA_API_SECRET_KEY   - Alpaca, for the market-data ingest
+#   PROPHET_PRODUCTION_MODEL=market-vol    - which model to build/serve (default)
+# Optional:
+#   PROPHET_TICKERS=AAPL,MSFT,...          - tickers (else reads PROPHET_CASHFLOW_DSN)
+#   PROPHET_MONITOR_DSN=postgresql://...   - enable forecast-vs-actual logging

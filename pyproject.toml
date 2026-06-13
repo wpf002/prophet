@@ -49,6 +49,9 @@ dev = [
     "ipykernel>=6.29.0",
     "jupyter>=1.1.0",
 ]
+dashboard = [
+    "streamlit>=1.40.0",
+]
 
 [project.scripts]
 prophet = "prophet.cli:app"

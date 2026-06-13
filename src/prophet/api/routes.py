@@ -2,16 +2,33 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel, Field
 
 from prophet import __version__
 from prophet.config import settings
+from prophet.serving.registry import ForecastPoint as RegistryPoint
 from prophet.serving.registry import forecast_series, get_production_model
 
 router = APIRouter()
+logger = logging.getLogger("prophet")
+
+
+def _log_forecast(
+    model_name: str, series_id: str, horizon: int, points: list[RegistryPoint]
+) -> None:
+    """Persist served forecasts for later accuracy scoring. Never raises."""
+    if not settings.monitor_dsn:
+        return
+    try:
+        from prophet.monitoring.store import forecast_rows, log_forecasts
+
+        log_forecasts(settings.monitor_dsn, forecast_rows(series_id, model_name, horizon, points))
+    except Exception:  # logging must never break a forecast response
+        logger.warning("forecast logging failed", exc_info=True)
 
 
 class HealthResponse(BaseModel):
@@ -63,7 +80,7 @@ async def health() -> HealthResponse:
 
 
 @router.post("/forecast", response_model=ForecastResponse)
-async def forecast(request: ForecastRequest) -> ForecastResponse:
+async def forecast(request: ForecastRequest, background: BackgroundTasks) -> ForecastResponse:
     """Generate a forecast (with optional prediction intervals) for a series."""
     try:
         model = get_production_model(settings.production_model)
@@ -84,10 +101,12 @@ async def forecast(request: ForecastRequest) -> ForecastResponse:
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    model_name = f"{model.name}:{model.model_col}"
+    background.add_task(_log_forecast, model_name, request.series_id, request.horizon, points)
     return ForecastResponse(
         series_id=request.series_id,
         horizon=request.horizon,
-        model=f"{model.name}:{model.model_col}",
+        model=model_name,
         generated_at=datetime.now(tz=UTC),
         forecasts=[ForecastPoint(ds=p.ds, y_hat=p.y_hat, lo=p.lo, hi=p.hi) for p in points],
     )

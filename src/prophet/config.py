@@ -52,5 +52,8 @@ class Settings(BaseSettings):
     # Serving — which persisted production model the API loads and serves.
     production_model: str = Field(default="market-vol")
 
+    # Monitoring — Postgres DSN for forecast-vs-actual logging. Empty disables it.
+    monitor_dsn: str = Field(default="", validation_alias="PROPHET_MONITOR_DSN")
+
 
 settings = Settings()
