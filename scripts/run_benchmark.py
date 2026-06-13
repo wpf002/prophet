@@ -85,6 +85,19 @@ def main(
             "Weekly": "W",
         }[m4_freq.value]
         target = m4_target(m4_freq.value, method="ETS")
+    elif dataset.startswith("domain-"):
+        from prophet.data.domains import DOMAIN_SPECS, load_domain
+
+        name = dataset.split("-", 1)[1]
+        if name not in DOMAIN_SPECS:
+            console.print(f"[red]Unknown domain '{name}'. Known: {sorted(DOMAIN_SPECS)}[/red]")
+            raise typer.Exit(code=2)
+        spec = DOMAIN_SPECS[name]
+        train_df, test_df = load_domain(name, settings.data_raw, sample_n=sample_n)
+        seasonality = spec.seasonality
+        horizon = spec.horizon
+        freq = spec.freq
+        target = None
     else:
         console.print(f"[red]Unknown dataset: {dataset}[/red]")
         raise typer.Exit(code=2)
