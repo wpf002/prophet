@@ -7,19 +7,6 @@
 # PROPHET_CASHFLOW_DSN to read tickers from the live portfolio (else --tickers).
 set -euo pipefail
 
-echo "[diag] PYTHONPATH=${PYTHONPATH:-<unset>}"
-echo "[diag] /app/src/prophet contents:"; ls /app/src/prophet 2>&1 || true
-echo "[diag] /app/src/prophet/models contents:"; ls /app/src/prophet/models 2>&1 || true
-python - <<'PY' || true
-import prophet
-print("[diag] prophet.__path__:", list(getattr(prophet, "__path__", [])))
-try:
-    import prophet.models.ml  # noqa: F401
-    print("[diag] import prophet.models.ml -> OK")
-except Exception as e:
-    print(f"[diag] import prophet.models.ml -> {type(e).__name__}: {e}")
-PY
-
 DATASET="${PROPHET_PRODUCTION_MODEL:-market-vol}"
 MODEL_DIR="models/production/${DATASET}"
 
