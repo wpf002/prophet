@@ -3673,7 +3673,6 @@ dependencies = [
     { name = "lightgbm" },
     { name = "mlflow" },
     { name = "mlforecast" },
-    { name = "neuralforecast" },
     { name = "optuna" },
     { name = "polars" },
     { name = "psycopg", extra = ["binary"] },
@@ -3697,10 +3696,14 @@ dev = [
     { name = "ipykernel" },
     { name = "jupyter" },
     { name = "mypy" },
+    { name = "neuralforecast" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+]
+neural = [
+    { name = "neuralforecast" },
 ]
 
 [package.metadata]
@@ -3716,7 +3719,8 @@ requires-dist = [
     { name = "mlflow", specifier = ">=2.20.0" },
     { name = "mlforecast", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.0" },
-    { name = "neuralforecast", specifier = ">=2.0.0" },
+    { name = "neuralforecast", marker = "extra == 'dev'", specifier = ">=2.0.0" },
+    { name = "neuralforecast", marker = "extra == 'neural'", specifier = ">=2.0.0" },
     { name = "optuna", specifier = ">=4.1.0" },
     { name = "polars", specifier = ">=1.20.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
@@ -3736,7 +3740,7 @@ requires-dist = [
     { name = "utilsforecast", specifier = ">=0.2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
 ]
-provides-extras = ["dev", "dashboard"]
+provides-extras = ["dev", "dashboard", "neural"]
 
 [[package]]
 name = "protobuf"

@@ -8,10 +8,10 @@ license = { text = "MIT" }
 authors = [{ name = "Will Foreman", email = "wpf002@users.noreply.github.com" }]
 
 dependencies = [
-    # Nixtla forecasting suite
+    # Nixtla forecasting suite (neuralforecast/torch is an optional extra — it is
+    # only used by the killed Phase 4 and would bloat the serving image with CUDA)
     "statsforecast>=2.0.0",
     "mlforecast>=1.0.0",
-    "neuralforecast>=2.0.0",
     "hierarchicalforecast>=1.0.0",
     "utilsforecast>=0.2.0",
     # Data
@@ -48,9 +48,14 @@ dev = [
     "mypy>=1.14.0",
     "ipykernel>=6.29.0",
     "jupyter>=1.1.0",
+    # neural stack so the killed-Phase-4 code + its test still run locally/CI
+    "neuralforecast>=2.0.0",
 ]
 dashboard = [
     "streamlit>=1.40.0",
+]
+neural = [
+    "neuralforecast>=2.0.0",
 ]
 
 [project.scripts]
