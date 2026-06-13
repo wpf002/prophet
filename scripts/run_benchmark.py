@@ -40,9 +40,11 @@ def main(
     ),
     n_jobs: int | None = typer.Option(
         None,
-        help="StatsForecast worker processes. Default leaves ~4 cores free for "
+        help="Worker/thread count for models. Default leaves ~4 cores free for "
         "interactive use; pass -1 to use all cores.",
     ),
+    tune: bool = typer.Option(True, help="ML only: run Optuna hyperparameter tuning."),
+    n_trials: int = typer.Option(50, help="ML only: number of Optuna trials when tuning."),
 ) -> None:
     """Run the benchmark."""
     console.rule(f"[bold cyan]Prophet benchmark — {dataset} / {models}[/bold cyan]")
@@ -89,13 +91,13 @@ def main(
     console.print(f"  horizon: {horizon}")
     console.print(f"  seasonality: {seasonality}")
 
-    if models not in ("baselines", "statistical"):
+    if models not in ("baselines", "statistical", "ml"):
         console.print(
             f"\n[yellow]Model group '{models}' not yet implemented. See ROADMAP.md.[/yellow]"
         )
         raise typer.Exit(code=1)
 
-    phase = {"baselines": "1", "statistical": "2"}[models]
+    phase = {"baselines": "1", "statistical": "2", "ml": "3"}[models]
 
     with benchmark_run(
         run_name=f"{dataset}-{models}",
@@ -107,7 +109,7 @@ def main(
             forecasts = forecast_baselines(
                 train_df, horizon=horizon, seasonality=seasonality, freq=freq, n_jobs=n_jobs
             )
-        else:
+        elif models == "statistical":
             from prophet.models.statistical import forecast_statistical
 
             forecasts, info = forecast_statistical(
@@ -127,6 +129,35 @@ def main(
                 f"{name} ({info.ensemble_weights[name]:.2f})" for name in info.ensemble_members
             )
             console.print(f"\n[bold]Ensemble (inverse-CV-MASE weighted):[/bold] {members}")
+        else:  # ml
+            from prophet.models.ml import forecast_ml
+
+            forecasts, ml_info = forecast_ml(
+                train_df,
+                horizon=horizon,
+                season_length=seasonality,
+                freq=freq,
+                tune=tune,
+                n_trials=n_trials,
+                n_jobs=n_jobs,
+            )
+            # Log CV MASE, best params, and feature importance to MLflow.
+            mlflow.log_metric("cv_mase_LightGBM", ml_info.cv_mase_untuned)
+            if ml_info.cv_mase_tuned is not None:
+                mlflow.log_metric("cv_mase_LightGBM_tuned", ml_info.cv_mase_tuned)
+            mlflow.log_param("n_trials", ml_info.n_trials)
+            for name, value in ml_info.best_params.items():
+                mlflow.log_param(f"best_{name}", value)
+            mlflow.log_dict(ml_info.feature_importance, "feature_importance.json")
+            if ml_info.best_params:
+                mlflow.log_dict(ml_info.best_params, "best_params.json")
+            top_feats = sorted(
+                ml_info.feature_importance.items(), key=lambda kv: kv[1], reverse=True
+            )[:8]
+            console.print(
+                "\n[bold]Top features (gain):[/bold] "
+                + ", ".join(f"{n}={v:.0f}" for n, v in top_feats)
+            )
 
         model_cols = [c for c in forecasts.columns if c not in ("unique_id", "ds")]
 

@@ -124,7 +124,7 @@ See `ROADMAP.md` for full phase breakdown with acceptance and kill criteria.
 | 0 | Done | Foundation: scaffold, deps, CI, tests skeleton |
 | 1 | Done | Naive baselines on M4 hourly — SeasonalNaive MASE 1.19 ([results](docs/phase-1-results.md)) |
 | 2 | Done | Statistical — AutoARIMA MASE 0.948 beats the SeasonalNaive floor ([results](docs/phase-2-results.md)) |
-| 3 | Open | ML: LightGBM via MLForecast |
+| 3 | Done | ML — tuned LightGBM MASE 0.934 beats AutoARIMA ([results](docs/phase-3-results.md)) |
 | 4 | Open | Neural: NHITS, TFT, PatchTST |
 | 5 | Open | Applied domain (casino ops / sports betting) |
 | 6 | Open | API + monitoring (drift, forecast vs actual) |

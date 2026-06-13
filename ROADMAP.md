@@ -81,25 +81,36 @@ SeasonalNaive floor (1.193) and within ~6% of the M4 winner. See
 
 ---
 
-## Phase 3 — ML models
+## Phase 3 — ML models ✅
+
+**Status:** Done. Tuned LightGBM reaches MASE 0.934 on M4 hourly, beating the
+best statistical model (AutoARIMA, 0.948) and within ~4.6% of the M4 winner
+(0.893). See [docs/phase-3-results.md](docs/phase-3-results.md) (MLflow run
+`042fba2d…`).
 
 **Goal:** Beat best statistical model with LightGBM-based ML approach using lag features.
 
 **Models:**
 - LightGBM via MLForecast with:
-  - Lag features (1, 7, 14, 28 for daily; 1, 24, 168 for hourly)
-  - Rolling mean / std features
-  - Calendar features (day of week, day of month, month, quarter)
-- LightGBM with Optuna hyperparameter tuning
+  - Lag features (1, 24, 48, 168 for hourly)
+  - Rolling mean / std features (windows 24, 168)
+  - Calendar features (hour, day of week, day of month, month, is-weekend)
+  - Target transforms: seasonal differencing (24) + per-series standardization
+- LightGBM with Optuna hyperparameter tuning (50 trials)
 
 **Acceptance:**
-- MLForecast pipeline runs reproducibly
-- Tuned LightGBM beats best Phase 2 statistical model on MASE
-- Feature importance logged
-- Optuna study artifacts stored in MLflow
+- MLForecast pipeline runs reproducibly ✅
+- Tuned LightGBM beats best Phase 2 statistical model on MASE (0.934 < 0.948) ✅
+- Feature importance logged ✅
+- Optuna best params / study artifacts stored in MLflow ✅
+
+> **Key finding:** the roadmap's feature recipe alone gave a broken model (untuned
+> MASE 8.6) — a global GBM is dominated by large-scale M4 series. Seasonal
+> differencing (24) + per-series standardization fixed it (untuned → 0.97).
+> Requires `brew install libomp` for LightGBM on macOS.
 
 **Kill criteria:**
-- ML model cannot beat statistical baselines with reasonable tuning (means the problem is genuinely statistical-favorable and we should not invest in neural)
+- ML model cannot beat statistical baselines with reasonable tuning — not triggered.
 
 ---
 
