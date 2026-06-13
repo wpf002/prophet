@@ -67,6 +67,23 @@ DOMAIN_SPECS: dict[str, DomainSpec] = {
         seasonality=7,
         description="Personal cash flow (Syntrackr), daily with weekly seasonality.",
     ),
+    # Market data on the user's portfolio tickers (Alpaca daily bars). Trading
+    # days are reindexed to a regular sequence (calendar gaps dropped), so
+    # seasonality is the 5-day trading week and the horizon is ~1 trading month.
+    "market-close": DomainSpec(
+        name="market-close",
+        freq="D",
+        horizon=21,
+        seasonality=5,
+        description="Daily close price (cents) for portfolio tickers. Expected: ~random walk.",
+    ),
+    "market-vol": DomainSpec(
+        name="market-vol",
+        freq="D",
+        horizon=21,
+        seasonality=5,
+        description="Daily trading volume for portfolio tickers. Expected: forecastable.",
+    ),
 }
 
 

@@ -144,23 +144,38 @@ TFT (2.23, ~15 min) and PatchTST (6.03) are worse and far costlier. See
 
 ---
 
-## Phase 5 — Applied domain
+## Phase 5 — Applied domain ✅
+
+**Status:** Done. Pivoted from Syntrackr cash flow (turned out to be an
+investment tracker with no time series) to forecasting the **28 portfolio
+tickers' market data** (Alpaca daily bars, live). Honest result: **volume is
+forecastable** (statistical ensemble MASE 0.85, ~12% over the naive floor),
+**prices are a random walk** (no classical model beats RandomWalkWithDrift).
+See [docs/phase-5-market-results.md](docs/phase-5-market-results.md).
 
 **Goal:** Port the methodology to a problem with real stakes.
 
 **Candidate domains (pick one):**
 - Casino table game revenue forecasting (hourly, multi-game, multi-day-of-week seasonality)
 - Sports betting line movement / closing line value drift (intraday, event-keyed)
-- Personal cash flow forecasting via Syntrackr data (monthly, intervention scenarios)
+- ~~Personal cash flow via Syntrackr~~ — Syntrackr has no time-series data; pivoted
+  to portfolio market data (same live Postgres + the portfolio's Alpaca keys).
 
 **Acceptance:**
-- Domain data ingested and preprocessed
-- Same model ladder run on domain data
-- Documented accuracy on holdout period with realistic forecast horizon
-- Honest writeup: did this work? Where does it fail?
+- Domain data ingested and preprocessed (`scripts/ingest_market.py`) ✅
+- Same model ladder run on domain data (`--dataset domain-market-{close,vol}`) ✅
+- Documented accuracy on holdout vs. naive floor, both targets ✅
+- Honest writeup: methodology transfers (separates forecastable volume from
+  random-walk prices); global ML is data-starved at 28 series ✅
+
+> **Source-agnostic pipeline:** `prophet/data/domains.py` + `--dataset domain-<name>`
+> reuse the whole ladder; a domain only needs a connector that writes long-format
+> Parquet. Single-window holdout — rolling-origin CV is the next rigor step.
 
 **Kill criteria:**
-- Best model worse than seasonal naive on domain data (means the data is too noisy or the problem isn't tractable with available features)
+- Best model worse than seasonal naive — met for *prices* (correctly: they're a
+  random walk), not for *volume* (forecastable). Domain retained on the volume
+  result.
 
 ---
 

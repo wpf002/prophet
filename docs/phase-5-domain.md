@@ -1,8 +1,13 @@
 # Phase 5 — Applied Domain (Plan & Data Access)
 
-**Status:** In progress — pipeline scaffolded; **blocked on live data access.**
-**Decision:** Run all three candidate domains (casino, sports betting, cash flow)
-through the same model ladder, executed **sequentially** via a shared
+**Status:** Superseded — see [phase-5-market-results.md](docs/phase-5-market-results.md).
+Syntrackr turned out to be an investment tracker with no time series, so the
+applied domain pivoted to **portfolio market data** (forecastable volume vs.
+random-walk prices). This doc is retained as the original plan + the reusable
+data-access playbook for the casino/betting domains if pursued later.
+
+**Decision (original):** Run all three candidate domains (casino, sports betting,
+cash flow) through the same model ladder, executed **sequentially** via a shared
 source-agnostic pipeline — not three bespoke builds.
 
 ## Why one pipeline, three domains

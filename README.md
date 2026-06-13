@@ -126,7 +126,7 @@ See `ROADMAP.md` for full phase breakdown with acceptance and kill criteria.
 | 2 | Done | Statistical — AutoARIMA MASE 0.948 beats the SeasonalNaive floor ([results](docs/phase-2-results.md)) |
 | 3 | Done | ML — tuned LightGBM MASE 0.934 beats AutoARIMA ([results](docs/phase-3-results.md)) |
 | 4 | Done | Neural — evaluated; killed (best NHITS 0.975 < LightGBM 0.934) ([decision](docs/phase-4-decision.md)) |
-| 5 | In progress | Applied domain — pipeline scaffolded, awaiting live data ([plan](docs/phase-5-domain.md)) |
+| 5 | Done | Applied domain — portfolio market data; volume forecastable (~12% over naive), prices a random walk ([results](docs/phase-5-market-results.md)) |
 | 6 | Open | API + monitoring (drift, forecast vs actual) |
 
 ---
