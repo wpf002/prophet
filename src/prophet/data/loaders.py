@@ -123,7 +123,8 @@ def load_synthetic(
     season_period = 24 if frequency == "1h" else 7
 
     rng = np.random.default_rng(seed)
-    start_ts = dt.datetime(2024, 1, 1)
+    # UTC-aware per the project invariant: no naive timestamps anywhere.
+    start_ts = dt.datetime(2024, 1, 1, tzinfo=dt.UTC)
     timestamps = [start_ts + delta * j for j in range(n_obs)]
 
     dfs: list[pl.DataFrame] = []

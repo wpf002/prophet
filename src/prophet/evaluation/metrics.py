@@ -9,21 +9,27 @@ All functions accept and return Polars DataFrames in long format:
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
+import numpy.typing as npt
 import polars as pl
 
+# Metric functions operate on 1-D float arrays (typically `Series.to_numpy()`).
+FloatArray = npt.NDArray[np.float64]
 
-def mae(y: np.ndarray, y_hat: np.ndarray) -> float:
+
+def mae(y: FloatArray, y_hat: FloatArray) -> float:
     """Mean Absolute Error."""
     return float(np.mean(np.abs(y - y_hat)))
 
 
-def rmse(y: np.ndarray, y_hat: np.ndarray) -> float:
+def rmse(y: FloatArray, y_hat: FloatArray) -> float:
     """Root Mean Squared Error."""
     return float(np.sqrt(np.mean((y - y_hat) ** 2)))
 
 
-def smape(y: np.ndarray, y_hat: np.ndarray) -> float:
+def smape(y: FloatArray, y_hat: FloatArray) -> float:
     """Symmetric Mean Absolute Percentage Error (M4 official definition).
 
     Range: [0, 200]. Lower is better.
@@ -36,7 +42,7 @@ def smape(y: np.ndarray, y_hat: np.ndarray) -> float:
     return float(np.mean(np.abs(y[mask] - y_hat[mask]) / denom[mask]) * 100)
 
 
-def mape(y: np.ndarray, y_hat: np.ndarray) -> float:
+def mape(y: FloatArray, y_hat: FloatArray) -> float:
     """Mean Absolute Percentage Error. Undefined where y == 0."""
     mask = y != 0
     if not mask.any():
@@ -44,7 +50,7 @@ def mape(y: np.ndarray, y_hat: np.ndarray) -> float:
     return float(np.mean(np.abs((y[mask] - y_hat[mask]) / y[mask])) * 100)
 
 
-def wape(y: np.ndarray, y_hat: np.ndarray) -> float:
+def wape(y: FloatArray, y_hat: FloatArray) -> float:
     """Weighted Absolute Percentage Error (a.k.a. WMAPE).
 
     Equivalent to sum(|y - y_hat|) / sum(|y|). Robust to zeros in y as long as
@@ -57,9 +63,9 @@ def wape(y: np.ndarray, y_hat: np.ndarray) -> float:
 
 
 def mase(
-    y: np.ndarray,
-    y_hat: np.ndarray,
-    y_train: np.ndarray,
+    y: FloatArray,
+    y_hat: FloatArray,
+    y_train: FloatArray,
     seasonality: int = 1,
 ) -> float:
     """Mean Absolute Scaled Error (Hyndman & Koehler 2006).
@@ -86,7 +92,7 @@ def mase(
     return float(np.mean(np.abs(y - y_hat)) / scale)
 
 
-def pinball_loss(y: np.ndarray, q_hat: np.ndarray, tau: float) -> float:
+def pinball_loss(y: FloatArray, q_hat: FloatArray, tau: float) -> float:
     """Pinball loss for quantile forecasts.
 
     Args:
@@ -152,7 +158,7 @@ def evaluate(
 def aggregate_metrics(metrics_df: pl.DataFrame) -> dict[str, float]:
     """Compute mean of each metric across series."""
     return {
-        col: float(metrics_df[col].mean())
+        col: float(cast(float, metrics_df[col].mean()))
         for col in ["mae", "rmse", "smape", "wape", "mase"]
         if col in metrics_df.columns
     }

@@ -19,6 +19,7 @@ def forecast_baselines(
     horizon: int,
     seasonality: int,
     freq: str,
+    n_jobs: int = -1,
 ) -> pl.DataFrame:
     """Generate forecasts from all baseline models.
 
@@ -27,6 +28,7 @@ def forecast_baselines(
         horizon: Number of steps to forecast.
         seasonality: Seasonal period for SeasonalNaive.
         freq: Pandas frequency string (e.g. "H", "D", "M").
+        n_jobs: Worker processes for StatsForecast. -1 uses all cores.
 
     Returns:
         Polars DataFrame with columns: unique_id, ds,
@@ -51,8 +53,12 @@ def forecast_baselines(
     # Nixtla currently expects pandas at the boundary
     train_pd = train_df.sort(["unique_id", "ds"]).to_pandas()
 
-    sf = StatsForecast(models=models, freq=freq, n_jobs=-1)
+    sf = StatsForecast(models=models, freq=freq, n_jobs=n_jobs)
     forecasts_pd = sf.forecast(df=train_pd, h=horizon)
-    return pl.from_pandas(
+    forecasts = pl.from_pandas(
         forecasts_pd.reset_index() if "unique_id" not in forecasts_pd.columns else forecasts_pd
     )
+    # Honor the project invariant: all timestamps are Datetime("us", "UTC").
+    # StatsForecast hands ds back as nanosecond precision; align it so forecasts
+    # join cleanly against the us-precision actuals.
+    return forecasts.with_columns(pl.col("ds").cast(pl.Datetime("us", "UTC")))

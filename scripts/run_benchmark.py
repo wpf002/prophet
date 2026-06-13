@@ -10,6 +10,9 @@ Usage:
 
 from __future__ import annotations
 
+import os
+
+import mlflow
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -30,9 +33,25 @@ def main(
     dataset: str = typer.Option("synthetic", help="Dataset: synthetic, m4-hourly, m4-daily"),
     models: str = typer.Option("baselines", help="Model group: baselines, statistical, ml, neural"),
     sample_n: int | None = typer.Option(None, help="Cap on number of unique series"),
+    rank_sample_n: int | None = typer.Option(
+        None,
+        help="Statistical only: rank the ensemble on this many sampled series "
+        "(final forecast still covers all series).",
+    ),
+    n_jobs: int | None = typer.Option(
+        None,
+        help="StatsForecast worker processes. Default leaves ~4 cores free for "
+        "interactive use; pass -1 to use all cores.",
+    ),
 ) -> None:
     """Run the benchmark."""
     console.rule(f"[bold cyan]Prophet benchmark — {dataset} / {models}[/bold cyan]")
+
+    # Be a polite neighbour by default: leave headroom so a long AutoARIMA run
+    # doesn't starve the UI. Opt back into all cores with --n-jobs -1.
+    if n_jobs is None:
+        n_jobs = max(1, (os.cpu_count() or 4) - 4)
+    console.print(f"  workers (n_jobs): {n_jobs}")
 
     if dataset == "synthetic":
         df = load_synthetic(n_series=10, n_obs=500, frequency="1h", seed=settings.random_seed)
@@ -40,11 +59,15 @@ def main(
         horizon = 24
         freq = "h"
         target = None
+        # Synthetic data has no separate test split; hold out the last `horizon`.
+        train_df, test_df = split_train_test(df, horizon=horizon)
     elif dataset.startswith("m4-"):
         freq_str = dataset.split("-", 1)[1].capitalize()
         m4_freq = M4Frequency(freq_str)
-        train, _test = load_m4(m4_freq, settings.data_raw, sample_n=sample_n)
-        df = train  # train already excludes the held-out test
+        # Use the official M4 train/test split so results reproduce published
+        # scores. The test split is the held-out horizon Naive2 was scored on;
+        # the full train series is what MASE scales against.
+        train_df, test_df = load_m4(m4_freq, settings.data_raw, sample_n=sample_n)
         seasonality = m4_freq.seasonality
         horizon = m4_freq.horizon
         freq = {
@@ -60,50 +83,78 @@ def main(
         console.print(f"[red]Unknown dataset: {dataset}[/red]")
         raise typer.Exit(code=2)
 
-    console.print(f"  series: {df['unique_id'].n_unique()}")
-    console.print(f"  observations: {df.height}")
+    console.print(f"  series: {train_df['unique_id'].n_unique()}")
+    console.print(f"  train observations: {train_df.height}")
+    console.print(f"  test observations: {test_df.height}")
     console.print(f"  horizon: {horizon}")
     console.print(f"  seasonality: {seasonality}")
 
-    if models != "baselines":
+    if models not in ("baselines", "statistical"):
         console.print(
             f"\n[yellow]Model group '{models}' not yet implemented. See ROADMAP.md.[/yellow]"
         )
         raise typer.Exit(code=1)
 
-    # Phase 1 baseline path
-    train_df, test_df = split_train_test(df, horizon=horizon)
-
-    from prophet.models.baselines import forecast_baselines
+    phase = {"baselines": "1", "statistical": "2"}[models]
 
     with benchmark_run(
-        run_name=f"{dataset}-baselines",
-        tags={"phase": "1", "dataset": dataset, "models": "baselines"},
+        run_name=f"{dataset}-{models}",
+        tags={"phase": phase, "dataset": dataset, "models": models},
     ):
-        forecasts = forecast_baselines(
-            train_df, horizon=horizon, seasonality=seasonality, freq=freq
-        )
+        if models == "baselines":
+            from prophet.models.baselines import forecast_baselines
+
+            forecasts = forecast_baselines(
+                train_df, horizon=horizon, seasonality=seasonality, freq=freq, n_jobs=n_jobs
+            )
+        else:
+            from prophet.models.statistical import forecast_statistical
+
+            forecasts, info = forecast_statistical(
+                train_df,
+                horizon=horizon,
+                season_length=seasonality,
+                freq=freq,
+                rank_sample_n=rank_sample_n,
+                n_jobs=n_jobs,
+            )
+            # Log the CV-based ensemble selection and weights.
+            log_metrics_dict(info.cv_mase, prefix="cv_mase_")
+            log_metrics_dict(info.ensemble_weights, prefix="ens_weight_")
+            mlflow.set_tag("ensemble_members", ",".join(info.ensemble_members))
+            mlflow.log_param("cv_windows", info.cv_windows)
+            members = ", ".join(
+                f"{name} ({info.ensemble_weights[name]:.2f})" for name in info.ensemble_members
+            )
+            console.print(f"\n[bold]Ensemble (inverse-CV-MASE weighted):[/bold] {members}")
 
         model_cols = [c for c in forecasts.columns if c not in ("unique_id", "ds")]
-        results_table = Table(title="Per-model aggregate metrics")
-        results_table.add_column("Model")
-        results_table.add_column("MASE", justify="right")
-        results_table.add_column("sMAPE", justify="right")
-        results_table.add_column("WAPE", justify="right")
 
+        # Evaluate every model, then present ranked by MASE (best first).
+        rows: list[tuple[str, dict[str, float]]] = []
         for col in model_cols:
             metrics_df = evaluate(
                 train_df, test_df, forecasts, seasonality=seasonality, model_col=col
             )
             agg = aggregate_metrics(metrics_df)
             log_metrics_dict(agg, prefix=f"{col}_")
+            rows.append((col, agg))
+        rows.sort(key=lambda r: r[1]["mase"])
+
+        results_table = Table(title=f"Per-model aggregate metrics ({dataset}, ranked by MASE)")
+        results_table.add_column("Rank", justify="right")
+        results_table.add_column("Model")
+        results_table.add_column("MASE", justify="right")
+        results_table.add_column("sMAPE", justify="right")
+        results_table.add_column("WAPE", justify="right")
+        for rank, (col, agg) in enumerate(rows, start=1):
             results_table.add_row(
+                str(rank),
                 col,
                 f"{agg['mase']:.4f}",
                 f"{agg['smape']:.4f}",
                 f"{agg['wape']:.4f}",
             )
-
         console.print(results_table)
 
         if target is not None:

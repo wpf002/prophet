@@ -5,6 +5,7 @@ Every benchmark run must be logged as an MLflow run. No exceptions.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -16,6 +17,10 @@ from prophet.config import settings
 
 def configure_mlflow() -> None:
     """Configure MLflow tracking URI and experiment from settings."""
+    # Prophet tracks to the committed `mlruns/` file store (see config default).
+    # Recent MLflow gates the file-store backend behind this opt-out; set it
+    # before any store is constructed so set_experiment() below succeeds.
+    os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
     mlflow.set_experiment(settings.mlflow_experiment_name)
 

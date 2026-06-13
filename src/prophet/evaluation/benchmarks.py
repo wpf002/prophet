@@ -60,7 +60,15 @@ M4_BENCHMARKS: dict[str, dict[str, M4Score]] = {
         "Smyl_winner": {"smape": 2.836, "mase": 3.045},
     },
     "Hourly": {
-        "Naive2": {"smape": 18.383, "mase": 11.608},
+        # Naive2 MASE corrected from 11.608 to 2.395 in Phase 1: the original
+        # value was the plain Naive(1) score, not Naive2. Verified by scoring the
+        # official M4 Naive2 submission (datasetsforecast mirror) with our metric
+        # against the held-out test, clean train scaling -> MASE 2.395, sMAPE
+        # 18.383. See docs/phase-1-results.md.
+        "Naive2": {"smape": 18.383, "mase": 2.395},
+        # NOTE: SES/Theta Hourly MASE below are unverified and look anomalous
+        # (~11.5, the Naive(1) magnitude rather than the 2-3 range Naive2 lands
+        # in). Treat as suspect until checked against their official submissions.
         "SES": {"smape": 18.094, "mase": 11.426},
         "Theta": {"smape": 18.138, "mase": 11.504},
         "ETS": {"smape": 17.307, "mase": 3.443},
