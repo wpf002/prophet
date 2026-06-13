@@ -25,6 +25,7 @@ COPY scripts ./scripts
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH=/app/src \
     PROPHET_API_HOST=0.0.0.0
 
 EXPOSE 8000
