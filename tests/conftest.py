@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+import os
+
+# LightGBM (libomp) and torch each ship an OpenMP runtime; loading both in one
+# process aborts on macOS ("OMP Error #15"), which surfaces as a segfault when
+# the LightGBM and neural tests run in the same session. Tolerate the duplicate.
+# Must be set before either library is imported, i.e. before test collection.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 import pytest
 
 

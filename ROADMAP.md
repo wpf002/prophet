@@ -114,7 +114,12 @@ best statistical model (AutoARIMA, 0.948) and within ~4.6% of the M4 winner
 
 ---
 
-## Phase 4 — Neural models
+## Phase 4 — Neural models ✅ (killed)
+
+**Status:** Done. **Decision: kill neural for the production path.** Best neural
+(NHITS, MASE 0.975, 16s on MPS) does not beat the Phase 3 LightGBM (0.934);
+TFT (2.23, ~15 min) and PatchTST (6.03) are worse and far costlier. See
+[docs/phase-4-decision.md](docs/phase-4-decision.md) (MLflow run `d128abef…`).
 
 **Goal:** Evaluate whether neural architectures justify their cost on this data.
 
@@ -124,12 +129,18 @@ best statistical model (AutoARIMA, 0.948) and within ~4.6% of the M4 winner
 - PatchTST
 
 **Acceptance:**
-- All three trained on M4 hourly via NeuralForecast
-- Honest comparison logged: best neural vs. best ML vs. best statistical
-- Decision documented in ROADMAP.md: do neurals justify production cost or not?
+- All three trained on M4 hourly via NeuralForecast ✅
+- Honest comparison logged: best neural vs. best ML vs. best statistical ✅
+- Decision documented (kill, with revisit conditions) ✅
+
+> **Outcome:** No accuracy win over LightGBM. NHITS is cheap and competitive
+> (revisit if Phase 5 data scale grows or probabilistic forecasts are needed);
+> the transformers don't suit 414 short hourly series. Neural code retained.
 
 **Kill criteria:**
-- Best neural model worse than tuned LightGBM and slower by 10x (means kill neural for this domain — log the result and move on, don't sink more time)
+- Best neural worse than tuned LightGBM and 10x slower — partially met (best
+  neural is worse but cheap; transformers are worse AND slower). Killed on the
+  "no accuracy benefit at higher complexity" basis.
 
 ---
 

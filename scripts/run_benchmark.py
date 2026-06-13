@@ -45,6 +45,10 @@ def main(
     ),
     tune: bool = typer.Option(True, help="ML only: run Optuna hyperparameter tuning."),
     n_trials: int = typer.Option(50, help="ML only: number of Optuna trials when tuning."),
+    max_steps: int = typer.Option(1000, help="Neural only: training steps per model."),
+    accelerator: str = typer.Option(
+        "mps", help="Neural only: device (mps, cpu, gpu). Falls back to CPU per model."
+    ),
 ) -> None:
     """Run the benchmark."""
     console.rule(f"[bold cyan]Prophet benchmark — {dataset} / {models}[/bold cyan]")
@@ -91,13 +95,13 @@ def main(
     console.print(f"  horizon: {horizon}")
     console.print(f"  seasonality: {seasonality}")
 
-    if models not in ("baselines", "statistical", "ml"):
+    if models not in ("baselines", "statistical", "ml", "neural"):
         console.print(
             f"\n[yellow]Model group '{models}' not yet implemented. See ROADMAP.md.[/yellow]"
         )
         raise typer.Exit(code=1)
 
-    phase = {"baselines": "1", "statistical": "2", "ml": "3"}[models]
+    phase = {"baselines": "1", "statistical": "2", "ml": "3", "neural": "4"}[models]
 
     with benchmark_run(
         run_name=f"{dataset}-{models}",
@@ -129,7 +133,7 @@ def main(
                 f"{name} ({info.ensemble_weights[name]:.2f})" for name in info.ensemble_members
             )
             console.print(f"\n[bold]Ensemble (inverse-CV-MASE weighted):[/bold] {members}")
-        else:  # ml
+        elif models == "ml":
             from prophet.models.ml import forecast_ml
 
             forecasts, ml_info = forecast_ml(
@@ -157,6 +161,31 @@ def main(
             console.print(
                 "\n[bold]Top features (gain):[/bold] "
                 + ", ".join(f"{n}={v:.0f}" for n, v in top_feats)
+            )
+        else:  # neural
+            from prophet.models.neural import forecast_neural
+
+            forecasts, neural_info = forecast_neural(
+                train_df,
+                horizon=horizon,
+                season_length=seasonality,
+                freq=freq,
+                max_steps=max_steps,
+                accelerator=accelerator,
+            )
+            mlflow.log_param("max_steps", neural_info.max_steps)
+            mlflow.log_param("input_size", neural_info.input_size)
+            for mname, t in neural_info.timings.items():
+                mlflow.log_metric(f"{mname}_fit_seconds", t.fit_seconds)
+                mlflow.log_metric(f"{mname}_predict_seconds", t.predict_seconds)
+                mlflow.set_tag(f"{mname}_device", t.device)
+            if neural_info.failures:
+                console.print(f"\n[red]Failed models:[/red] {neural_info.failures}")
+            console.print(
+                "\n[bold]Training time:[/bold] "
+                + ", ".join(
+                    f"{m} {t.fit_seconds:.0f}s ({t.device})" for m, t in neural_info.timings.items()
+                )
             )
 
         model_cols = [c for c in forecasts.columns if c not in ("unique_id", "ds")]
