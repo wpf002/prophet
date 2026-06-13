@@ -17,13 +17,17 @@ def test_health_returns_ok() -> None:
     assert "timestamp" in body
 
 
-def test_forecast_returns_501_until_phase_6() -> None:
+def test_forecast_503_when_model_absent(monkeypatch) -> None:
+    """With no production model configured, /forecast reports unavailable."""
+    from prophet.config import settings
+    from prophet.serving import registry
+
+    monkeypatch.setattr(settings, "production_model", "__no_such_model__")
+    registry.get_production_model.cache_clear()
+
     client = TestClient(app)
-    response = client.post(
-        "/forecast",
-        json={"series_id": "test", "horizon": 24},
-    )
-    assert response.status_code == 501
+    response = client.post("/forecast", json={"series_id": "test", "horizon": 5})
+    assert response.status_code == 503
 
 
 def test_forecast_validates_horizon_bounds() -> None:

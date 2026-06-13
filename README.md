@@ -127,7 +127,7 @@ See `ROADMAP.md` for full phase breakdown with acceptance and kill criteria.
 | 3 | Done | ML — tuned LightGBM MASE 0.934 beats AutoARIMA ([results](docs/phase-3-results.md)) |
 | 4 | Done | Neural — evaluated; killed (best NHITS 0.975 < LightGBM 0.934) ([decision](docs/phase-4-decision.md)) |
 | 5 | Done | Applied domain — portfolio market data; volume forecastable (~12% over naive), prices a random walk ([results](docs/phase-5-market-results.md)) |
-| 6 | Open | API + monitoring (drift, forecast vs actual) |
+| 6 | Code-complete | Productionize — real `/forecast` with intervals + drift monitoring; deploy + 30-day accuracy pending ([results](docs/phase-6-results.md)) |
 
 ---
 

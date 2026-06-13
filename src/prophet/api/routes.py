@@ -8,6 +8,8 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from prophet import __version__
+from prophet.config import settings
+from prophet.serving.registry import forecast_series, get_production_model
 
 router = APIRouter()
 
@@ -62,11 +64,30 @@ async def health() -> HealthResponse:
 
 @router.post("/forecast", response_model=ForecastResponse)
 async def forecast(request: ForecastRequest) -> ForecastResponse:
-    """Generate forecasts for a registered series.
+    """Generate a forecast (with optional prediction intervals) for a series."""
+    try:
+        model = get_production_model(settings.production_model)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
 
-    Phase 6 — not yet implemented. Returns 501.
-    """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Phase 6 not started. Forecast endpoint not yet wired to a model registry.",
+    try:
+        points = forecast_series(model, request.series_id, request.horizon, level=request.level)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown series_id '{request.series_id}'. "
+            f"This model serves {model.metadata['n_series']} series.",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return ForecastResponse(
+        series_id=request.series_id,
+        horizon=request.horizon,
+        model=f"{model.name}:{model.model_col}",
+        generated_at=datetime.now(tz=UTC),
+        forecasts=[ForecastPoint(ds=p.ds, y_hat=p.y_hat, lo=p.lo, hi=p.hi) for p in points],
     )

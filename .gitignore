@@ -89,3 +89,9 @@ logs/
 # OS
 Thumbs.db
 .DS_Store
+
+# Persisted model artifacts
+models/
+
+.env*
+!.env.example

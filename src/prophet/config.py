@@ -49,5 +49,8 @@ class Settings(BaseSettings):
     # Reproducibility
     random_seed: int = Field(default=42)
 
+    # Serving — which persisted production model the API loads and serves.
+    production_model: str = Field(default="market-vol")
+
 
 settings = Settings()

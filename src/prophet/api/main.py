@@ -18,9 +18,26 @@ from prophet.config import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup and shutdown hooks."""
-    # Startup: connect to MLflow, load any production models, etc.
+    # Warm the production model into memory so the first request is fast. Missing
+    # model is non-fatal — /forecast then returns 503 until one is trained.
+    import logging
+
+    from prophet.serving.registry import get_production_model
+
+    try:
+        model = get_production_model(settings.production_model)
+        logging.getLogger("prophet").info(
+            "Loaded production model '%s' (%d series).",
+            settings.production_model,
+            model.metadata["n_series"],
+        )
+    except FileNotFoundError:
+        logging.getLogger("prophet").warning(
+            "No production model '%s' on startup; /forecast will return 503.",
+            settings.production_model,
+        )
     yield
-    # Shutdown: close resources
+    # Shutdown: nothing to release (model is in-process memory).
 
 
 app = FastAPI(

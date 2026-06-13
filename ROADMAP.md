@@ -179,23 +179,30 @@ See [docs/phase-5-market-results.md](docs/phase-5-market-results.md).
 
 ---
 
-## Phase 6 — Productionize
+## Phase 6 — Productionize 🟡 (code-complete; deploy pending)
+
+**Status:** The deployable software is built and verified locally — a persisted
+model served behind a real `/forecast` (point + conformal intervals), drift
+detection (PSI + rolling MASE), and the forecast-vs-actual schema. Remaining
+items are external/time-bound (Railway deploy, 30 days of accuracy). See
+[docs/phase-6-results.md](docs/phase-6-results.md).
 
 **Goal:** One deployed model serving forecasts with monitoring.
 
 **Components:**
-- FastAPI endpoint `/forecast` accepting series ID + horizon, returning point + interval forecasts
-- Scheduled retraining (cron via Railway or similar)
-- Forecast vs. actual logging to PostgreSQL (TimescaleDB extension)
-- Drift detection: PSI on input distribution, rolling MASE alert on degradation
-- Dashboard (simple Next.js or Streamlit) showing accuracy over time
+- `/forecast` (series + horizon + level → point + intervals) ✅ (`prophet/serving/`)
+- Drift detection: PSI + rolling-MASE alert ✅ (`prophet/monitoring/drift.py`)
+- Forecast vs. actual logging schema ✅ (`prophet/monitoring/schema.py`)
+- Scheduled retraining (cron) — script exists (`train_production.py`); cron pending
+- Dashboard (Streamlit/Next.js) — pending
 
 **Acceptance:**
-- API deployed to Railway with public health endpoint
-- At least 30 days of forecast vs. actual logged
-- Drift detection actively running with at least one fired alert (positive or false-positive both acceptable as proof)
-- Plain-language accuracy report ("forecasts have been within X% on average over the last 30 days")
+- Real `/forecast` serving a persisted model with intervals ✅ (verified locally)
+- Drift detection + forecast/actual schema implemented and tested ✅
+- API deployed to Railway with public health endpoint — **pending** (deploy step)
+- ≥30 days of forecast vs. actual logged — **pending** (calendar time)
+- Plain-language accuracy report — pending (follows from the 30 days)
 
 **Kill criteria:**
-- Production accuracy materially worse than backtest accuracy (means evaluation methodology was wrong — go back to Phase 3 and fix)
-- Cost to maintain exceeds value created (kill the project, document the lesson)
+- Production accuracy materially worse than backtest (evaluation was wrong — back to Phase 3) — to assess once deployed.
+- Maintenance cost exceeds value — to assess.
