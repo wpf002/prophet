@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import typer
@@ -43,13 +44,19 @@ def main(
         console.print(f"[red]No market target for '{dataset}'. Known: {sorted(TARGETS)}[/red]")
         raise typer.Exit(code=2)
 
+    # Resolve series: the served model's metadata if present, else PROPHET_TICKERS
+    # (so the actuals cron can run as a standalone container with no model artifact).
     meta_path = Path("models/production") / settings.production_model / "metadata.json"
-    series = json.loads(meta_path.read_text())["series"] if meta_path.exists() else None
-
-    bars = fetch_bars(series or [], start=start, end=end) if series else None
-    if bars is None:
-        console.print("[red]No production model metadata; cannot resolve series.[/red]")
+    if meta_path.exists():
+        series = json.loads(meta_path.read_text())["series"]
+    else:
+        env_tickers = os.environ.get("PROPHET_TICKERS", "")
+        series = [t.strip().upper() for t in env_tickers.split(",") if t.strip()]
+    if not series:
+        console.print("[red]No series: set PROPHET_TICKERS or provide a model artifact.[/red]")
         raise typer.Exit(code=2)
+
+    bars = fetch_bars(series, start=start, end=end)
 
     panel = to_long(bars, TARGETS[dataset])
     rows = [(r["unique_id"], r["ds"], float(r["y"])) for r in panel.to_dicts()]

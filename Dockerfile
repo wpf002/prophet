@@ -29,7 +29,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 EXPOSE 8000
 
-# The entrypoint ensures a production model exists, then serves.
+# Default command serves the API (ensures a model exists first). Using CMD (not
+# ENTRYPOINT) lets a cron service override it with e.g. the record_actuals job.
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/entrypoint.sh"]
