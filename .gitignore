@@ -91,7 +91,7 @@ Thumbs.db
 .DS_Store
 
 # Persisted model artifacts
-models/
+/models/
 
 .env*
 !.env.example

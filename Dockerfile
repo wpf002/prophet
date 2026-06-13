@@ -19,11 +19,11 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# App source. The project itself is NOT pip-installed — an editable install
-# registers an import finder that shadowed PYTHONPATH and hid prophet.models.
-# Instead `prophet` is imported straight from the source tree via PYTHONPATH.
+# App source + install the project (explicit hatch packaging ships every
+# subpackage). PYTHONPATH=/app/src is kept as a belt-and-suspenders fallback.
 COPY src ./src
 COPY scripts ./scripts
+RUN uv sync --frozen --no-dev --no-editable
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH=/app/src \
