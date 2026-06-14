@@ -38,14 +38,17 @@ nowcasts have obvious lead-time decision value.
 - `macro` DomainSpec (freq `MS`, horizon 12, seasonality 12) in
   `src/prophet/data/domains.py`.
 - A trained production model (`models/production/macro/`) served through the
-  existing multi-model API — verified end-to-end: `GET /models` lists `macro`,
-  and `forecast_series` returns UNRATE projections with 80% prediction intervals.
+  multi-model API — verified end-to-end: `GET /models` lists `macro`, and
+  `forecast_series` returns UNRATE projections with 80% prediction intervals.
 - `scripts/entrypoint.sh` builds the macro model on container boot (no
   credentials needed), so the hosted API serves it automatically.
 
-The served model uses **LightGBM** (MASE 0.40, the existing serving path).
-**AutoETS (0.17) is the true best** — serving statistical models is the obvious
-next upgrade, requiring StatsForecast save/load plumbing in the registry.
+The served model is **AutoETS** (MASE 0.17 — the benchmark winner). The registry
+now supports two engines: MLForecast/LightGBM (default, e.g. market-vol) and
+StatsForecast/AutoETS (`--method statistical`, persisted via `StatsForecast.save`
+and loaded by `engine: "statsforecast"` in metadata). StatsForecast's conformal
+intervals are calibrated for the full trained horizon, so serving predicts at
+that horizon and slices to the request.
 
 ## How Bloomberg consumes it
 

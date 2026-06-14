@@ -26,7 +26,8 @@ fi
 # it exists so the multi-model API serves it alongside the primary model.
 if [[ ! -f "models/production/macro/metadata.json" ]]; then
   echo "[entrypoint] Building macro model (FRED, no credentials)..."
-  python scripts/ingest_macro.py && python scripts/train_production.py --dataset macro \
+  python scripts/ingest_macro.py \
+    && python scripts/train_production.py --dataset macro --method statistical --n-jobs 1 \
     || echo "[entrypoint] macro build failed (non-fatal) — continuing."
 fi
 

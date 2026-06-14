@@ -39,6 +39,11 @@ class ProductionModel:
     def model_col(self) -> str:
         return str(self.metadata["model"])
 
+    @property
+    def engine(self) -> str:
+        """Serving engine: 'mlforecast' (default) or 'statsforecast'."""
+        return str(self.metadata.get("engine", "mlforecast"))
+
 
 @dataclass(frozen=True)
 class ForecastPoint:
@@ -51,8 +56,6 @@ class ForecastPoint:
 
 
 def _load(name: str, base_dir: Path) -> ProductionModel:
-    from mlforecast import MLForecast
-
     path = base_dir / name
     meta_path = path / "metadata.json"
     if not meta_path.exists():
@@ -61,8 +64,15 @@ def _load(name: str, base_dir: Path) -> ProductionModel:
             f"`uv run python scripts/train_production.py --dataset {name}`."
         )
     metadata = json.loads(meta_path.read_text())
-    mlf = MLForecast.load(str(path))
-    return ProductionModel(name=name, mlf=mlf, metadata=metadata)
+    if metadata.get("engine") == "statsforecast":
+        from statsforecast import StatsForecast
+
+        model = StatsForecast.load(str(path / "statsforecast.pkl"))
+    else:
+        from mlforecast import MLForecast
+
+        model = MLForecast.load(str(path))
+    return ProductionModel(name=name, mlf=model, metadata=metadata)
 
 
 @lru_cache(maxsize=8)
@@ -86,6 +96,7 @@ def list_production_models(base_dir: Path = PRODUCTION_DIR) -> list[dict[str, An
             {
                 "name": meta_path.parent.name,
                 "model": metadata.get("model"),
+                "engine": metadata.get("engine", "mlforecast"),
                 "freq": metadata.get("freq"),
                 "horizon": metadata.get("horizon"),
                 "seasonality": metadata.get("seasonality"),
@@ -114,8 +125,17 @@ def forecast_series(
         raise ValueError(f"horizon {horizon} exceeds model's calibrated horizon {model.horizon}.")
 
     levels = level or []
-    # MLForecast wants level=None (not []) when no intervals are requested.
-    forecast = model.mlf.predict(h=horizon, level=levels or None, ids=[series_id])
+    # Both engines want level=None (not []) when no intervals are requested.
+    if model.engine == "statsforecast":
+        # StatsForecast has no per-id predict filter, and its conformal intervals
+        # are calibrated for the full trained horizon — predict at that horizon,
+        # then select the series and slice to the requested steps.
+        forecast = model.mlf.predict(h=model.horizon, level=levels or None)
+        if "unique_id" not in forecast.columns:
+            forecast = forecast.reset_index()
+        forecast = forecast[forecast["unique_id"] == series_id].head(horizon)
+    else:
+        forecast = model.mlf.predict(h=horizon, level=levels or None, ids=[series_id])
     col = model.model_col
     non_negative = bool(model.metadata.get("non_negative", False))
 
