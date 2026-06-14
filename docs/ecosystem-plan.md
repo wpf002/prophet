@@ -9,9 +9,13 @@
   forecasted against the live service). Code in `clients/typescript/`.
 - ✅ **Step 3** — Prophet MCP tool in Trident (`prophet_forecast`, `prophet_models`);
   typecheck clean, verified against the live service. (Committed in the trident repo.)
-- ⬜ **Step 4** — wire one real app (gate_smart / vantage). **The gate** — needs
-  picking the app + its data + the decision the forecast improves.
-- ⬜ **Step 5** — UI / polish.
+- ✅ **Step 4** — wired **Crossbar** (read-only, zero app changes) and ran the
+  gate on real data. Verdict in `crossbar-verdict.md`: per-market YES price is a
+  near-martingale (beats naive <1% MASE) and per-market volume is bursty (naive
+  wins) — neither is decision-grade on the current open-markets snapshot. The
+  filter did its job; the promising target is platform-level aggregate activity,
+  which needs a read-only `CROSSBAR_DSN` for deeper history.
+- ⬜ **Step 5** — UI / polish (gated on finding a target that clears Step 4).
 
 ## The question this answers
 
