@@ -113,6 +113,17 @@ DOMAIN_SPECS: dict[str, DomainSpec] = {
         seasonality=24,
         description="Crossbar platform hourly total volume + trade count (load/liquidity).",
     ),
+    # Bellwether market-intelligence daily signal volume per industry+metric
+    # (events / company-mentions / buyer-complaints). Series are gap-filled to a
+    # daily grid by Bellwether's /trends endpoint; weekly seasonality, ~2-week
+    # horizon. Expected forecastability grows as the corpus accumulates.
+    "bellwether": DomainSpec(
+        name="bellwether",
+        freq="D",
+        horizon=14,
+        seasonality=7,
+        description="Bellwether daily signal volume per industry+metric (events/mentions/complaints).",
+    ),
 }
 
 
