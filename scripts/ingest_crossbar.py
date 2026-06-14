@@ -1,28 +1,34 @@
 """Phase-5 connector — Crossbar prediction-market prices -> domain Parquet.
 
-Reads the YES-contract trade price per market from Crossbar's Postgres
-(READ-ONLY) and writes a Prophet domain dataset in long format
-(unique_id = marketId, ds = synthetic per-trade step [Datetime us UTC],
-y = price 1-99 = implied probability). The model ladder then runs via
+Materializes the YES-contract price series per market into a Prophet domain
+dataset in long format (unique_id = marketId, ds = Datetime us UTC,
+y = price 1-99 = implied probability). The model ladder then runs unchanged via
 ``run_benchmark.py --dataset domain-crossbar``.
 
-This is strictly read-only against Crossbar — it never writes to or alters the
-Crossbar database or app. Set ``CROSSBAR_DSN`` (a read-only connection string)
-or pass ``--dsn``.
+Three read-only sources, in order of preference:
 
-``--synthetic`` generates a clearly-labeled stand-in (realistic prediction-market
-price walks) to prove the pipeline when no DB is reachable. Synthetic data is
-for wiring/verification only, never a forecastability verdict.
+* ``--api`` (default base ``https://crossbar.fly.dev``) — pulls the PUBLIC,
+  unauthenticated ``/markets`` list and each market's ``/candles`` (YES trades
+  already bucketed into a regular time grid server-side). No credentials, no DB
+  access. This is the recommended path for a real verdict.
+* ``CROSSBAR_DSN`` / ``--dsn`` — a read-only Postgres connection
+  (``default_transaction_read_only = on``); reindexes raw trades to a regular
+  per-market step. Never writes to or alters the Crossbar database.
+* ``--synthetic`` — a clearly-labeled stand-in (realistic price walks) to prove
+  the pipeline when no source is reachable. Never a forecastability verdict.
 
 Usage:
+    uv run python scripts/ingest_crossbar.py --api          # real, no creds
     CROSSBAR_DSN=postgresql://... uv run python scripts/ingest_crossbar.py
-    uv run python scripts/ingest_crossbar.py --synthetic   # pipeline proof
+    uv run python scripts/ingest_crossbar.py --synthetic    # pipeline proof
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
+import urllib.request
 
 import numpy as np
 import polars as pl
@@ -38,6 +44,51 @@ console = Console()
 
 _EPOCH = dt.datetime(2000, 1, 1, tzinfo=dt.UTC)
 NAME = "crossbar"
+DEFAULT_API = "https://crossbar.fly.dev"
+
+
+def _get_json(url: str, timeout: int = 20) -> object:
+    """GET and parse JSON from a public read-only endpoint."""
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        return json.load(resp)
+
+
+def _read_candles_api(
+    base_url: str, top_n: int, hours: int, bucket_ms: int, target: str = "close"
+) -> pl.DataFrame:
+    """READ-ONLY pull of bucketed YES candles via Crossbar's public API.
+
+    Returns a long panel (unique_id, ds [Datetime us UTC], y) built from the
+    busiest ``top_n`` open markets. ds is a real wall-clock grid (candle bucket
+    timestamps), so no synthetic reindexing is needed. ``target`` selects the y
+    column: ``close`` (YES price = implied probability) or ``volume`` (traded
+    quantity per bucket — the Phase-5-style forecastable activity signal).
+    """
+    key = {"close": "c", "volume": "v"}.get(target)
+    if key is None:
+        raise typer.BadParameter("target must be 'close' or 'volume'.")
+    base = base_url.rstrip("/")
+    markets = _get_json(f"{base}/markets")
+    if not isinstance(markets, list):
+        raise typer.BadParameter(f"Unexpected /markets response from {base}.")
+    markets = sorted(markets, key=lambda m: m.get("volume24h", 0) or 0, reverse=True)[:top_n]
+
+    rows: list[tuple[str, dt.datetime, float]] = []
+    for m in markets:
+        mid = m["id"]
+        try:
+            payload = _get_json(f"{base}/markets/{mid}/candles?bucket={bucket_ms}&hours={hours}")
+        except OSError:
+            continue
+        for c in payload.get("candles", []):  # type: ignore[union-attr]
+            ts = dt.datetime.fromtimestamp(int(c["t"]) / 1000, tz=dt.UTC)
+            rows.append((mid, ts, float(c[key])))
+
+    return (
+        pl.DataFrame(rows, schema=["unique_id", "ds", "y"], orient="row")
+        .with_columns(pl.col("ds").dt.cast_time_unit("us"))
+        .sort(["unique_id", "ds"])
+    )
 
 
 def _read_trades(dsn: str) -> pl.DataFrame:
@@ -96,25 +147,35 @@ def _to_long(trades: pl.DataFrame) -> pl.DataFrame:
 
 @app.command()
 def main(
+    api: bool = typer.Option(False, help="Pull real data via Crossbar's public read-only API."),
+    base_url: str = typer.Option(DEFAULT_API, help="Crossbar API base URL (with --api)."),
+    top_n: int = typer.Option(80, help="Busiest N open markets to pull (with --api)."),
+    hours: int = typer.Option(168, help="Candle look-back window in hours (max 168)."),
+    bucket_ms: int = typer.Option(3_600_000, help="Candle bucket size in ms (default 1h)."),
+    target: str = typer.Option("close", help="Forecast target (with --api): close | volume."),
     dsn: str | None = typer.Option(None, help="Read-only Crossbar DSN. Default: env CROSSBAR_DSN."),
     synthetic: bool = typer.Option(False, help="Generate labeled synthetic data (pipeline proof)."),
-    min_trades: int = typer.Option(40, help="Drop markets with fewer than this many trades."),
+    min_trades: int = typer.Option(40, help="Drop markets with fewer than this many points."),
 ) -> None:
-    """Build crossbar-train/test Parquet from Crossbar trades (read-only) or synthetic."""
+    """Build crossbar-train/test Parquet from Crossbar (read-only API/DSN) or synthetic."""
     spec = DOMAIN_SPECS[NAME]
-    if synthetic:
-        console.print("[yellow]Synthetic mode — pipeline proof only, not a real verdict.[/yellow]")
-        trades = _synthetic_trades()
+    if api:
+        console.print(f"[bold]API mode[/bold] — public read-only pull from {base_url} (y={target})")
+        panel = _read_candles_api(base_url, top_n, hours, bucket_ms, target)
     else:
-        dsn = dsn or os.environ.get("CROSSBAR_DSN")
-        if not dsn:
-            raise typer.BadParameter("Set CROSSBAR_DSN / --dsn, or use --synthetic.")
-        trades = _read_trades(dsn)
-    console.print(
-        f"[bold]Trades:[/bold] {trades.height} across {trades['unique_id'].n_unique()} markets"
-    )
+        if synthetic:
+            console.print("[yellow]Synthetic mode — pipeline proof only, not a verdict.[/yellow]")
+            trades = _synthetic_trades()
+        else:
+            dsn = dsn or os.environ.get("CROSSBAR_DSN")
+            if not dsn:
+                raise typer.BadParameter("Use --api, set CROSSBAR_DSN / --dsn, or --synthetic.")
+            trades = _read_trades(dsn)
+        panel = _to_long(trades)
 
-    panel = _to_long(trades)
+    console.print(
+        f"[bold]Series:[/bold] {panel['unique_id'].n_unique()} markets, {panel.height} points"
+    )
     counts = panel.group_by("unique_id").len()
     keep = counts.filter(pl.col("len") >= min_trades)["unique_id"]
     panel = panel.filter(pl.col("unique_id").is_in(keep))

@@ -90,7 +90,7 @@ DOMAIN_SPECS: dict[str, DomainSpec] = {
     "crossbar": DomainSpec(
         name="crossbar",
         freq="h",
-        horizon=12,
+        horizon=6,
         seasonality=1,
         description="Crossbar prediction-market YES price per market (implied probability).",
     ),
