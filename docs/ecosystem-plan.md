@@ -15,7 +15,13 @@
   wins) — neither is decision-grade on the current open-markets snapshot. The
   filter did its job; the promising target is platform-level aggregate activity,
   which needs a read-only `CROSSBAR_DSN` for deeper history.
-- ⬜ **Step 5** — UI / polish (gated on finding a target that clears Step 4).
+- ✅ **Step 4 cleared** — **Bloomberg / FRED macro** (CPI + unemployment) is the
+  real win: forecasting beats naive by **77% MASE** (AutoETS 0.17 vs naive 0.74),
+  with decades of history and obvious decision value. Connector + `macro`
+  DomainSpec + trained model served via the multi-model API, built on container
+  boot (no creds). See `macro-integration.md`. (Crossbar stays wired but is
+  data-age-limited; re-eval scheduled.)
+- ⬜ **Step 5** — UI / polish, now justified by a value-adding model.
 
 ## The question this answers
 

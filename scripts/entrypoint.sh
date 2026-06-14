@@ -22,6 +22,14 @@ else
   echo "[entrypoint] Found production model at ${MODEL_DIR}."
 fi
 
+# The macro model (FRED CPI + unemployment) needs no credentials — always ensure
+# it exists so the multi-model API serves it alongside the primary model.
+if [[ ! -f "models/production/macro/metadata.json" ]]; then
+  echo "[entrypoint] Building macro model (FRED, no credentials)..."
+  python scripts/ingest_macro.py && python scripts/train_production.py --dataset macro \
+    || echo "[entrypoint] macro build failed (non-fatal) — continuing."
+fi
+
 PORT="${PORT:-8000}"
 echo "[entrypoint] Serving on 0.0.0.0:${PORT}"
 exec uvicorn prophet.api.main:app --host 0.0.0.0 --port "${PORT}"

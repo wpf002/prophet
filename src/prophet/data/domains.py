@@ -94,6 +94,16 @@ DOMAIN_SPECS: dict[str, DomainSpec] = {
         seasonality=1,
         description="Crossbar prediction-market YES price per market (implied probability).",
     ),
+    # FRED macro series via Bloomberg (CPI, unemployment) — decades of monthly
+    # history, trend + mild seasonality + mean-reversion (beats naive). Horizon
+    # 12 months, annual seasonality.
+    "macro": DomainSpec(
+        name="macro",
+        freq="MS",
+        horizon=12,
+        seasonality=12,
+        description="FRED macro series (CPI, unemployment rate), monthly.",
+    ),
     # Platform-level hourly activity across ALL Crossbar markets (gap-filled to a
     # regular grid; missing hours = 0 trades). Daily seasonality, ~1-day horizon.
     "crossbar-agg": DomainSpec(
