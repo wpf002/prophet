@@ -84,6 +84,16 @@ DOMAIN_SPECS: dict[str, DomainSpec] = {
         seasonality=5,
         description="Daily trading volume for portfolio tickers. Expected: forecastable.",
     ),
+    # Crossbar prediction-market YES price (1-99 = implied probability) per market.
+    # Trades are reindexed to a regular per-market sequence; no calendar seasonality
+    # (price converges toward resolution), so seasonality=1.
+    "crossbar": DomainSpec(
+        name="crossbar",
+        freq="h",
+        horizon=12,
+        seasonality=1,
+        description="Crossbar prediction-market YES price per market (implied probability).",
+    ),
 }
 
 
