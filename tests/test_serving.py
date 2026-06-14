@@ -15,7 +15,11 @@ from mlforecast.utils import PredictionIntervals
 
 from prophet.data.loaders import load_synthetic
 from prophet.models.ml import UNTUNED_COL, _build_mlf
-from prophet.serving.registry import forecast_series, get_production_model
+from prophet.serving.registry import (
+    forecast_series,
+    get_production_model,
+    list_production_models,
+)
 
 HORIZON = 12
 
@@ -90,3 +94,18 @@ def test_horizon_beyond_calibration_raises(tmp_path: Path) -> None:
 def test_missing_model_raises_filenotfound(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         get_production_model("absent", str(tmp_path))
+
+
+def test_list_production_models(tmp_path: Path) -> None:
+    _make_model(tmp_path, "alpha")
+    _make_model(tmp_path, "beta")
+    summaries = list_production_models(tmp_path)
+    assert {s["name"] for s in summaries} == {"alpha", "beta"}
+    one = next(s for s in summaries if s["name"] == "alpha")
+    assert one["horizon"] == HORIZON
+    assert one["n_series"] == 2
+    assert one["model"] == UNTUNED_COL
+
+
+def test_list_production_models_empty_dir(tmp_path: Path) -> None:
+    assert list_production_models(tmp_path / "nope") == []

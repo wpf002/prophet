@@ -37,3 +37,22 @@ def test_forecast_validates_horizon_bounds() -> None:
         json={"series_id": "test", "horizon": 0},
     )
     assert response.status_code == 422
+
+
+def test_models_endpoint_lists_default_and_models() -> None:
+    client = TestClient(app)
+    response = client.get("/models")
+    assert response.status_code == 200
+    body = response.json()
+    assert "default" in body
+    assert isinstance(body["models"], list)
+
+
+def test_forecast_404_for_unknown_named_model() -> None:
+    """An explicitly named, missing model is a 404 (not 503)."""
+    client = TestClient(app)
+    response = client.post(
+        "/forecast",
+        json={"series_id": "test", "horizon": 5, "model": "__no_such_model__"},
+    )
+    assert response.status_code == 404

@@ -1,8 +1,10 @@
-"""Production model registry — load a persisted MLForecast model and serve it.
+"""Production model registry — load persisted MLForecast models and serve them.
 
-The API loads one production model (saved by ``scripts/train_production.py``) on
-startup and caches it in memory. ``forecast_series`` produces point forecasts and
-conformal prediction intervals for a single series.
+Models are saved by ``scripts/train_production.py`` under
+``models/production/<name>/``. ``get_production_model`` loads any of them by name
+(cached in memory); ``list_production_models`` advertises what's available;
+``forecast_series`` produces point forecasts and conformal prediction intervals
+for a single series.
 """
 
 from __future__ import annotations
@@ -63,10 +65,35 @@ def _load(name: str, base_dir: Path) -> ProductionModel:
     return ProductionModel(name=name, mlf=mlf, metadata=metadata)
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def get_production_model(name: str, base_dir: str = str(PRODUCTION_DIR)) -> ProductionModel:
     """Load (and cache in memory) the named production model."""
     return _load(name, Path(base_dir))
+
+
+def list_production_models(base_dir: Path = PRODUCTION_DIR) -> list[dict[str, Any]]:
+    """Summarize every persisted model under ``base_dir`` (no model load).
+
+    Returns one dict per model with the lightweight metadata fields, so the API
+    can advertise what it serves without pulling the heavy MLForecast objects.
+    """
+    if not base_dir.exists():
+        return []
+    summaries: list[dict[str, Any]] = []
+    for meta_path in sorted(base_dir.glob("*/metadata.json")):
+        metadata = json.loads(meta_path.read_text())
+        summaries.append(
+            {
+                "name": meta_path.parent.name,
+                "model": metadata.get("model"),
+                "freq": metadata.get("freq"),
+                "horizon": metadata.get("horizon"),
+                "seasonality": metadata.get("seasonality"),
+                "n_series": metadata.get("n_series"),
+                "trained_at": metadata.get("trained_at"),
+            }
+        )
+    return summaries
 
 
 def forecast_series(
