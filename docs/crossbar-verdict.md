@@ -72,6 +72,31 @@ provisioning ahead of load). Testing that needs a longer history than the public
 API's 7-day candle window exposes — i.e. a **read-only `CROSSBAR_DSN`** to reach
 the full `Trade` history. That is the concrete next step.
 
+## Update — platform aggregate tested against the real DB (read-only)
+
+Reached the full `Trade` history via `fly proxy` to `crossbar-db` (read-only):
+**197,814 trades, 1,249 markets, but only ~9 days** (2026-06-05 → 06-14). Built
+the platform hourly aggregate (total volume + trade count, gap-filled to a
+regular grid) as `crossbar-agg` and ran the ladder:
+
+| Model           |   MASE |
+|-----------------|-------:|
+| HistoricAverage | 1.0254 |
+| SeasonalNaive   | 1.4511 |
+| Naive           | 1.8284 |
+| best statistical (DynOptTheta) | 1.9253 |
+
+**"Predict the mean" wins** — no model beats HistoricAverage. With ~7 days of
+training, daily seasonality can't be learned and the series is burst-dominated.
+
+## Bottom line
+
+The integration is real, read-only, and correct (per-market via public API,
+aggregate via read-only DSN). The blocker is **data age**: Crossbar is ~9 days
+old, too young for forecasting to beat trivial baselines at any target tested.
+Value here is time-gated — re-run as history accumulates (weeks→months); the
+wiring is already done.
+
 ## How to reproduce
 
 ```bash

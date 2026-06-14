@@ -94,6 +94,15 @@ DOMAIN_SPECS: dict[str, DomainSpec] = {
         seasonality=1,
         description="Crossbar prediction-market YES price per market (implied probability).",
     ),
+    # Platform-level hourly activity across ALL Crossbar markets (gap-filled to a
+    # regular grid; missing hours = 0 trades). Daily seasonality, ~1-day horizon.
+    "crossbar-agg": DomainSpec(
+        name="crossbar-agg",
+        freq="h",
+        horizon=24,
+        seasonality=24,
+        description="Crossbar platform hourly total volume + trade count (load/liquidity).",
+    ),
 }
 
 
