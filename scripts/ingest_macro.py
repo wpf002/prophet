@@ -35,8 +35,11 @@ console = Console()
 
 NAME = "macro"
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
-# Forecastable defaults (trend + seasonality + mean-reversion), not random walks.
-DEFAULT_SERIES = ["CPIAUCSL", "UNRATE"]
+# Forecastable defaults — each verified to beat a naive forecast by >5% MASE
+# (trend + seasonality + mean-reversion), not random walks. CPI/unemployment are
+# the originals; retail sales, PCE price index, and vehicle sales were added
+# after the same filter (PAYEMS/INDPRO/HOUST dropped — naive wins or ties).
+DEFAULT_SERIES = ["CPIAUCSL", "UNRATE", "RSAFS", "PCEPI", "TOTALSA"]
 
 
 def _read_fred(series: str) -> pl.DataFrame:

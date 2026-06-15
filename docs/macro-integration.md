@@ -10,11 +10,21 @@ app under `~/Documents/GitHub` — Bloomberg already pulls FRED macro series
 
 ## Data
 
-- **CPIAUCSL** (CPI, monthly, from 1947) and **UNRATE** (unemployment rate,
-  monthly, from 1948) — ~950 points each. Pulled read-only from FRED's public
-  CSV. FRED occasionally omits a month (a `.` placeholder, e.g. a delayed
-  release — Oct 2025 was missing); the connector reindexes to a complete
-  month-start grid and linearly interpolates the gap.
+Five monthly FRED series, each verified to beat a naive forecast by >5% MASE
+(those that didn't — PAYEMS, INDPRO, HOUST, UMCSENT, DSPIC96 — were dropped;
+naive wins or ties on them):
+
+| Series   | Indicator             | AutoETS vs naive |
+|----------|-----------------------|------------------|
+| CPIAUCSL | CPI                   | −77%             |
+| PCEPI    | PCE price index       | −67%             |
+| RSAFS    | Retail sales          | −54%             |
+| TOTALSA  | Vehicle sales         | −14%             |
+| UNRATE   | Unemployment rate     | −77% (h=12)      |
+
+Pulled read-only from FRED's public CSV. FRED occasionally omits a month (a `.`
+placeholder, e.g. a delayed release); the connector reindexes each series to a
+complete month-start grid and linearly interpolates the gap.
 
 ## Verdict (the gate)
 
