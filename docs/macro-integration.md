@@ -60,6 +60,25 @@ and loaded by `engine: "statsforecast"` in metadata). StatsForecast's conformal
 intervals are calibrated for the full trained horizon, so serving predicts at
 that horizon and slices to the request.
 
+## Monitoring + auto-retrain
+
+`scripts/monitor_macro.py` is the monthly operations job:
+
+1. Re-ingests fresh FRED and retrains the AutoETS model (new monthly prints).
+2. Upserts realized values into `actuals` so the API's logged forecasts can be
+   scored.
+3. Reports rolling MAE + 95% interval calibration (flags a series MISCALIBRATED
+   if coverage drops below 0.80 with enough samples).
+
+Input-distribution PSI is deliberately not used here — at monthly frequency
+there are too few recent points for a stable PSI, and trending macro levels make
+it fire perpetually. Interval calibration is the right, sample-efficient check.
+
+Run it where `PROPHET_MONITOR_DSN` is reachable (the Railway Postgres public
+proxy works from anywhere). Scheduled monthly. Verified end-to-end against the
+production monitor DB (upserts actuals; accuracy accrues once logged forecasts
+reach their target month).
+
 ## How Bloomberg consumes it
 
 Bloomberg calls the Prophet API (or `@prophet/client`) with

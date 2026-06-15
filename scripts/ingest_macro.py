@@ -73,18 +73,15 @@ def _read_fred(series: str, retries: int = 3) -> pl.DataFrame:
     )
 
 
-@app.command()
-def main(
-    series: Annotated[
-        list[str] | None, typer.Option(help="FRED series ids (default: CPI, UNRATE).")
-    ] = None,
-) -> None:
-    """Build macro-train/test Parquet from FRED public CSV (read-only)."""
-    spec = DOMAIN_SPECS[NAME]
-    series = series or DEFAULT_SERIES
+def build_macro_panel(series: list[str] | None = None) -> pl.DataFrame:
+    """Fetch the macro series from FRED and return a clean long-format panel.
 
-    # Skip any series that still fails after retries — one slow/unavailable FRED
-    # endpoint must not abort the whole build (matters most on container boot).
+    Skips any series that still fails after retries (one slow FRED endpoint must
+    not abort the build), then reindexes each series to a complete month-start
+    grid and linearly interpolates FRED's occasional missing month. Reused by the
+    monthly monitor/retrain job.
+    """
+    series = series or DEFAULT_SERIES
     frames: list[pl.DataFrame] = []
     for s in series:
         try:
@@ -94,11 +91,7 @@ def main(
     if not frames:
         raise typer.Exit(code=1)
     panel = pl.concat(frames).sort(["unique_id", "ds"])
-
-    # FRED occasionally omits a month (a "." placeholder, e.g. a delayed release).
-    # Reindex each series to a complete month-start grid and linearly interpolate
-    # the gaps so the level series is regular for "MS"-frequency models.
-    panel = (
+    return (
         panel.group_by("unique_id")
         .agg(pl.col("ds").min().alias("lo"), pl.col("ds").max().alias("hi"))
         .with_columns(
@@ -112,9 +105,20 @@ def main(
         .with_columns(pl.col("y").interpolate().over("unique_id"))
         .sort(["unique_id", "ds"])
     )
+
+
+@app.command()
+def main(
+    series: Annotated[
+        list[str] | None, typer.Option(help="FRED series ids (default: CPI, UNRATE).")
+    ] = None,
+) -> None:
+    """Build macro-train/test Parquet from FRED public CSV (read-only)."""
+    spec = DOMAIN_SPECS[NAME]
+    panel = build_macro_panel(series)
     console.print(
-        f"[bold]Series:[/bold] {panel['unique_id'].n_unique()} ({', '.join(series)}), "
-        f"{panel.height} points"
+        f"[bold]Series:[/bold] {panel['unique_id'].n_unique()} "
+        f"({', '.join(panel['unique_id'].unique().sort().to_list())}), {panel.height} points"
     )
 
     train, test = split_train_test(panel, horizon=spec.horizon)
