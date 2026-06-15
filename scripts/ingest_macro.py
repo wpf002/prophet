@@ -42,9 +42,21 @@ FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
 DEFAULT_SERIES = ["CPIAUCSL", "UNRATE", "RSAFS", "PCEPI", "TOTALSA"]
 
 
-def _read_fred(series: str) -> pl.DataFrame:
-    """READ-ONLY pull of one FRED series as long format (unique_id, ds, y)."""
-    raw = urllib.request.urlopen(FRED_CSV.format(series=series), timeout=30).read().decode()
+def _read_fred(series: str, retries: int = 3) -> pl.DataFrame:
+    """READ-ONLY pull of one FRED series as long format (unique_id, ds, y).
+
+    Retries on transient network errors — important on container boot, where a
+    single slow FRED response must not abort the whole macro build.
+    """
+    raw = ""
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(FRED_CSV.format(series=series), timeout=30) as resp:
+                raw = resp.read().decode()
+            break
+        except OSError:  # timeouts, connection resets
+            if attempt == retries - 1:
+                raise
     df = pl.read_csv(io.StringIO(raw))
     df.columns = ["ds", "y"]
     return (
@@ -70,7 +82,18 @@ def main(
     """Build macro-train/test Parquet from FRED public CSV (read-only)."""
     spec = DOMAIN_SPECS[NAME]
     series = series or DEFAULT_SERIES
-    panel = pl.concat([_read_fred(s) for s in series]).sort(["unique_id", "ds"])
+
+    # Skip any series that still fails after retries — one slow/unavailable FRED
+    # endpoint must not abort the whole build (matters most on container boot).
+    frames: list[pl.DataFrame] = []
+    for s in series:
+        try:
+            frames.append(_read_fred(s))
+        except OSError as exc:
+            console.print(f"[yellow]Skipping {s} — FRED fetch failed: {exc}[/yellow]")
+    if not frames:
+        raise typer.Exit(code=1)
+    panel = pl.concat(frames).sort(["unique_id", "ds"])
 
     # FRED occasionally omits a month (a "." placeholder, e.g. a delayed release).
     # Reindex each series to a complete month-start grid and linearly interpolate
