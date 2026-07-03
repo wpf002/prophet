@@ -105,3 +105,35 @@ uv run python scripts/ingest_crossbar.py --api --top-n 120 --min-trades 48 --tar
 uv run python scripts/run_benchmark.py --dataset domain-crossbar --models baselines
 uv run python scripts/run_benchmark.py --dataset domain-crossbar --models statistical
 ```
+
+## Update — 2026-07-03: re-eval blocked, Crossbar source is gone
+
+Scheduled ~8-week re-evaluation (Crossbar's first trades were 2026-06-05, so the
+history *should* now span ~4 weeks). **It could not run — both read-only sources
+are unreachable, and no data was pulled.** No synthetic stand-in was used; there
+are no new numbers to report.
+
+- **Public API** `https://crossbar.fly.dev` → **NXDOMAIN** (host no longer
+  resolves). General internet was fine (GitHub API returned 200 from the same
+  shell), so this is the Crossbar host being gone, not a local network fault.
+- **Read-only DSN via Fly** → impossible. `flyctl` authenticates fine
+  (`whoami` = wfoti71992@gmail.com), but the account's only org (`personal`) now
+  lists **zero apps**; both `flyctl status -a crossbar` and `-a crossbar-db`
+  return *"Could not find App"*. No app ⇒ no `flyctl proxy` ⇒ no `Trade` history.
+
+**Interpretation:** the Crossbar deployment appears to have been **decommissioned
+/ deleted from Fly** at some point after the 2026-06-14 run. The blocker is no
+longer *data age* — it is *source availability*.
+
+The last real data we hold (unchanged since 2026-06-14) still spans only ~9 days:
+per-market `crossbar` 2026-06-09 → 06-14 (88 markets, 11,713 rows); aggregate
+`crossbar-agg` 2026-06-05 → 06-14 (2 series, 466 rows). Re-running the ladder on
+these would just reproduce the prior "not forecastable" verdict, so it was not
+repeated.
+
+**Decision: still not forecastable — and now un-testable until the source is
+restored.** The Prophet-side wiring (connector, DomainSpecs, model ladder) remains
+intact and correct; nothing here needs changing. To resume, Crossbar needs to be
+redeployed (or a new public API base / read-only `CROSSBAR_DSN` provided), after
+which the reproduce commands above run unchanged. All checks this run were
+read-only; no Crossbar resource was written to (none existed to write to).
