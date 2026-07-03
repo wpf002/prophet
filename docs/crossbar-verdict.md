@@ -106,34 +106,97 @@ uv run python scripts/run_benchmark.py --dataset domain-crossbar --models baseli
 uv run python scripts/run_benchmark.py --dataset domain-crossbar --models statistical
 ```
 
-## Update — 2026-07-03: re-eval blocked, Crossbar source is gone
+## Update — 2026-07-03: re-run on Railway with ~4 weeks of data
 
-Scheduled ~8-week re-evaluation (Crossbar's first trades were 2026-06-05, so the
-history *should* now span ~4 weeks). **It could not run — both read-only sources
-are unreachable, and no data was pulled.** No synthetic stand-in was used; there
-are no new numbers to report.
+**Source moved.** Crossbar migrated **Fly → Railway**. The old
+`https://crossbar.fly.dev` host is now NXDOMAIN and the Fly account lists zero
+apps, so the first pass this day found nothing. Located the new deployment via the
+Railway CLI (`crossbar` project): public read-only API at
+`https://api-production-e8e0.up.railway.app`, and a read-only Postgres reachable
+through Railway's public TCP proxy (`DATABASE_PUBLIC_URL`, no tunnel needed).
+Re-ran the full ladder against it. Read-only throughout
+(`SET default_transaction_read_only = on`; single grouped SELECT); nothing in
+Crossbar was written to.
 
-- **Public API** `https://crossbar.fly.dev` → **NXDOMAIN** (host no longer
-  resolves). General internet was fine (GitHub API returned 200 from the same
-  shell), so this is the Crossbar host being gone, not a local network fault.
-- **Read-only DSN via Fly** → impossible. `flyctl` authenticates fine
-  (`whoami` = wfoti71992@gmail.com), but the account's only org (`personal`) now
-  lists **zero apps**; both `flyctl status -a crossbar` and `-a crossbar-db`
-  return *"Could not find App"*. No app ⇒ no `flyctl proxy` ⇒ no `Trade` history.
+**Data now available:** the `Trade` table holds **378,124 trades across 2,615
+markets, 2026-06-05 → 2026-07-03 — ~28 days (4 weeks)**, up from the ~9 days at
+the 2026-06-14 run. (The public candle API is still capped at a 168-hour window,
+so *per-market* series remain ~7-day; the 4 weeks only reaches the *aggregate*,
+built from the full `Trade` history via `scripts/ingest_crossbar_agg.py`.)
 
-**Interpretation:** the Crossbar deployment appears to have been **decommissioned
-/ deleted from Fly** at some point after the 2026-06-14 run. The blocker is no
-longer *data age* — it is *source availability*.
+### Results (MASE, lower better; horizon 6 per-market / 24 aggregate)
 
-The last real data we hold (unchanged since 2026-06-14) still spans only ~9 days:
-per-market `crossbar` 2026-06-09 → 06-14 (88 markets, 11,713 rows); aggregate
-`crossbar-agg` 2026-06-05 → 06-14 (2 series, 466 rows). Re-running the ladder on
-these would just reproduce the prior "not forecastable" verdict, so it was not
-repeated.
+**Per-market YES price** (111 markets, held-out last 6h):
 
-**Decision: still not forecastable — and now un-testable until the source is
-restored.** The Prophet-side wiring (connector, DomainSpecs, model ladder) remains
-intact and correct; nothing here needs changing. To resume, Crossbar needs to be
-redeployed (or a new public API base / read-only `CROSSBAR_DSN` provided), after
-which the reproduce commands above run unchanged. All checks this run were
-read-only; no Crossbar resource was written to (none existed to write to).
+| Model                 |   MASE | vs Naive |
+|-----------------------|-------:|---------:|
+| Naive / SeasonalNaive | 1.9838 | floor    |
+| DynamicOptimizedTheta | 2.0376 | +2.7% (worse) |
+
+Still a **near-martingale** — no model beats last-value carry-forward. Unchanged
+efficient-market signature.
+
+**Per-market per-bucket volume** (111 markets, held-out last 6h):
+
+| Model                 |   MASE | vs Naive |
+|-----------------------|-------:|---------:|
+| DynamicOptimizedTheta | **1.4475** | **−27.8%** |
+| AutoTheta             | 1.4486 | −27.8% |
+| AutoARIMA             | 1.4656 | −27.0% |
+| HistoricAverage       | 1.9158 | −4.5%  |
+| Naive / SeasonalNaive | 2.0057 | floor  |
+
+**This flipped.** In June, naive won volume outright; now every classical model
+beats naive by ~28%. For bursty volume, "carry the last hour forward" is a poor
+rule and Theta's mean-reversion does materially better. (Global LightGBM still
+crashes on this panel — series too short for the lag window, same as June.)
+
+**Platform hourly aggregate** (`platform_volume` + `platform_trades`, 686 h/series,
+gap-filled, held-out last 24h):
+
+| Model           |   MASE |
+|-----------------|-------:|
+| LightGBM        | 2.6836 |
+| HistoricAverage | 2.6865 |
+| SeasonalNaive   | 2.7106 |
+| best statistical (AutoARIMA) | 2.9307 |
+
+**"Predict the mean" still wins** — LightGBM only ties HistoricAverage (0.1%, noise)
+and every statistical model is worse. Four weeks wasn't enough: the series is
+~44% zero-hours (dead overnight / between events) plus large bursts, so daily
+seasonality is still swamped by intermittency.
+
+### Verdict — improved, but not yet shippable
+
+- **Price:** not forecastable (martingale). Unchanged.
+- **Aggregate:** not forecastable — mean wins, no >5% margin. Unchanged in
+  conclusion despite 4× more history; the hourly series is too intermittent.
+- **Per-market volume:** genuinely crossed the "beats naive by >5%" bar (~28%).
+  But it is **not servable as a production model**: the winning models are
+  *per-series* (Theta), keyed on `marketId`, and Crossbar markets are short-lived
+  single-match sports markets that resolve within days — the served registry
+  (`forecast_series`) only answers for series it was trained on, so a model fit
+  today is stale within a week. The transferable alternative (a global LightGBM
+  applied to any new market by its recent history) still won't fit — series are
+  too short. So the volume signal is **real but not yet decision-grade**.
+
+**Decision: do not ship a model yet.** No production model was trained or served.
+The forecastable target (per-market volume) isn't servable; the servable target
+(aggregate) isn't forecastable. Re-run as history deepens — the aggregate is the
+one to watch (it gains a real ops decision once it beats HistoricAverage), and the
+volume edge becomes shippable once markets are long-lived enough for a global model
+to fit. The Railway wiring is now in place (`ingest_crossbar.py` default host
+updated; `ingest_crossbar_agg.py` added), so the next re-run is a straight rerun.
+
+Reproduce (Railway):
+
+```bash
+API=https://api-production-e8e0.up.railway.app
+uv run python scripts/ingest_crossbar.py --api --base-url $API --top-n 120 --min-trades 48            # price
+uv run python scripts/run_benchmark.py --dataset domain-crossbar --models baselines   # + statistical, ml
+uv run python scripts/ingest_crossbar.py --api --base-url $API --top-n 120 --min-trades 48 --target volume
+uv run python scripts/run_benchmark.py --dataset domain-crossbar --models statistical
+# aggregate (read-only DB): DSN from `railway variables --service Postgres --kv` in the crossbar repo
+CROSSBAR_DSN=postgresql://... uv run python scripts/ingest_crossbar_agg.py
+uv run python scripts/run_benchmark.py --dataset domain-crossbar-agg --models statistical
+```

@@ -7,7 +7,7 @@ y = price 1-99 = implied probability). The model ladder then runs unchanged via
 
 Three read-only sources, in order of preference:
 
-* ``--api`` (default base ``https://crossbar.fly.dev``) — pulls the PUBLIC,
+* ``--api`` (default base is the Railway API service) — pulls the PUBLIC,
   unauthenticated ``/markets`` list and each market's ``/candles`` (YES trades
   already bucketed into a regular time grid server-side). No credentials, no DB
   access. This is the recommended path for a real verdict.
@@ -44,7 +44,9 @@ console = Console()
 
 _EPOCH = dt.datetime(2000, 1, 1, tzinfo=dt.UTC)
 NAME = "crossbar"
-DEFAULT_API = "https://crossbar.fly.dev"
+# Crossbar migrated Fly -> Railway (2026-07); the old crossbar.fly.dev host no
+# longer resolves. This is the public read-only API service on Railway.
+DEFAULT_API = "https://api-production-e8e0.up.railway.app"
 
 
 def _get_json(url: str, timeout: int = 20) -> object:
