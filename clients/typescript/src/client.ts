@@ -1,8 +1,11 @@
 import { codeForStatus, ProphetError } from "./errors.js";
 import {
+  AdhocForecastResponseWire,
   ForecastResponseWire,
   HealthResponseWire,
   ModelsResponseWire,
+  type AdhocForecastInput,
+  type AdhocForecastResult,
   type ForecastInput,
   type ForecastResult,
   type HealthResult,
@@ -57,6 +60,47 @@ export class Prophet {
       seriesId: r.series_id,
       horizon: r.horizon,
       model: r.model,
+      generatedAt: r.generated_at,
+      forecasts: r.forecasts.map((p) => ({
+        ds: p.ds,
+        yHat: p.y_hat,
+        lo: p.lo ?? undefined,
+        hi: p.hi ?? undefined,
+      })),
+    };
+  }
+
+  /**
+   * Forecast a caller-supplied series with automatic model selection. Stateless
+   * and universal — no pre-trained model needed. The result includes a
+   * forecastability verdict (`beatsNaive`): whether the chosen model beats a
+   * naive baseline on your own data.
+   */
+  async forecastAdhoc(input: AdhocForecastInput): Promise<AdhocForecastResult> {
+    const body = {
+      series: input.series,
+      horizon: input.horizon,
+      freq: input.freq,
+      seasonality: input.seasonality,
+      level: input.level,
+    };
+    const raw = await this.request("POST", "/forecast/adhoc", body);
+    const parsed = AdhocForecastResponseWire.safeParse(raw);
+    if (!parsed.success) {
+      throw new ProphetError("Unexpected /forecast/adhoc response shape.", {
+        code: "invalid_response",
+        cause: parsed.error,
+      });
+    }
+    const r = parsed.data;
+    return {
+      model: r.model,
+      seasonality: r.seasonality,
+      horizon: r.horizon,
+      nObs: r.n_obs,
+      beatsNaive: r.beats_naive ?? undefined,
+      naiveMase: r.naive_mase ?? undefined,
+      modelMase: r.model_mase ?? undefined,
       generatedAt: r.generated_at,
       forecasts: r.forecasts.map((p) => ({
         ds: p.ds,

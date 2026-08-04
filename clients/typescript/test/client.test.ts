@@ -29,6 +29,55 @@ describe("Prophet client", () => {
     expect(res.forecasts[0]?.lo).toEqual({ "95": 80 });
   });
 
+  it("forecastAdhoc maps the verdict + points", async () => {
+    const f = fakeFetch(200, {
+      model: "AutoETS",
+      seasonality: 12,
+      horizon: 3,
+      n_obs: 72,
+      beats_naive: true,
+      naive_mase: 1.0,
+      model_mase: 0.42,
+      generated_at: "2026-06-15T00:00:00Z",
+      forecasts: [{ ds: "2026-07-01T00:00:00Z", y_hat: 4.3, lo: { "80": 4.1 }, hi: { "80": 4.5 } }],
+    });
+    const res = await client(f).forecastAdhoc({
+      series: [
+        { ds: "2020-01-01T00:00:00Z", y: 1 },
+        { ds: "2020-02-01T00:00:00Z", y: 2 },
+      ],
+      horizon: 3,
+      freq: "MS",
+      level: [80],
+    });
+    expect(res.model).toBe("AutoETS");
+    expect(res.beatsNaive).toBe(true);
+    expect(res.nObs).toBe(72);
+    expect(res.forecasts[0]?.lo).toEqual({ "80": 4.1 });
+  });
+
+  it("forecastAdhoc leaves beatsNaive undefined when null", async () => {
+    const f = fakeFetch(200, {
+      model: "Naive",
+      seasonality: 1,
+      horizon: 2,
+      n_obs: 10,
+      beats_naive: null,
+      generated_at: "2026-06-15T00:00:00Z",
+      forecasts: [{ ds: "2026-07-01T00:00:00Z", y_hat: 5 }],
+    });
+    const res = await client(f).forecastAdhoc({
+      series: [
+        { ds: "2020-01-01T00:00:00Z", y: 1 },
+        { ds: "2020-02-01T00:00:00Z", y: 2 },
+      ],
+      horizon: 2,
+      freq: "MS",
+    });
+    expect(res.beatsNaive).toBeUndefined();
+    expect(res.model).toBe("Naive");
+  });
+
   it("models maps n_series -> nSeries", async () => {
     const f = fakeFetch(200, {
       default: "market-vol",

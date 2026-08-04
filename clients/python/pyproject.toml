@@ -1,0 +1,14 @@
+[project]
+name = "prophet-client"
+version = "0.1.0"
+description = "Python client for the Prophet forecasting service — the seam apps forecast against."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/prophet_client"]
