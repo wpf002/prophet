@@ -77,6 +77,46 @@ class ForecastResponse(BaseModel):
     forecasts: list[ForecastPoint]
 
 
+class SeriesObservation(BaseModel):
+    """One (timestamp, value) point of a caller-supplied series."""
+
+    ds: datetime
+    y: float
+
+
+class AdhocForecastRequest(BaseModel):
+    """Bring-your-own-series forecast request (no pre-trained model needed)."""
+
+    series: list[SeriesObservation] = Field(
+        ..., min_length=2, description="Regularly-spaced (ds, y) observations."
+    )
+    horizon: int = Field(..., ge=1, le=720, description="Number of steps to forecast.")
+    freq: str = Field(..., description="Pandas offset alias, e.g. 'MS', 'D', 'h'.")
+    seasonality: int | None = Field(
+        default=None, description="Seasonal period. Inferred from freq when omitted."
+    )
+    level: list[int] | None = Field(
+        default=None, description="Prediction-interval confidence levels (e.g. [80])."
+    )
+
+
+class AdhocForecastResponse(BaseModel):
+    """Ad-hoc forecast plus the built-in forecastability verdict."""
+
+    model: str
+    seasonality: int
+    horizon: int
+    n_obs: int
+    beats_naive: bool | None = Field(
+        default=None, description="Did the chosen model beat naive on the caller's data? "
+        "None when the series was too short to validate."
+    )
+    naive_mase: float | None = None
+    model_mase: float | None = None
+    generated_at: datetime
+    forecasts: list[ForecastPoint]
+
+
 class ModelSummary(BaseModel):
     """Lightweight description of one served model."""
 
@@ -112,6 +152,41 @@ async def models() -> ModelsResponse:
     return ModelsResponse(
         default=settings.production_model,
         models=[ModelSummary(**m) for m in list_production_models()],
+    )
+
+
+@router.post("/forecast/adhoc", response_model=AdhocForecastResponse)
+async def forecast_adhoc_route(request: AdhocForecastRequest) -> AdhocForecastResponse:
+    """Forecast a caller-supplied series with automatic model selection.
+
+    Stateless and universal: any app can send a raw time series and get a
+    forecast plus a forecastability verdict (does the best model beat naive?),
+    with no pre-trained model or server-side registration.
+    """
+    from prophet.serving.adhoc import forecast_adhoc
+
+    pairs = [(o.ds, o.y) for o in request.series]
+    try:
+        result = forecast_adhoc(
+            pairs,
+            horizon=request.horizon,
+            freq=request.freq,
+            seasonality=request.seasonality,
+            level=request.level,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return AdhocForecastResponse(
+        model=result.model,
+        seasonality=result.seasonality,
+        horizon=request.horizon,
+        n_obs=result.n_obs,
+        beats_naive=result.beats_naive,
+        naive_mase=result.naive_mase,
+        model_mase=result.model_mase,
+        generated_at=datetime.now(tz=UTC),
+        forecasts=[ForecastPoint(ds=p.ds, y_hat=p.y_hat, lo=p.lo, hi=p.hi) for p in result.points],
     )
 
 
