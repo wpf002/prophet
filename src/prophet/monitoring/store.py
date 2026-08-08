@@ -71,3 +71,21 @@ def rolling_accuracy(dsn: str, days: int = 30) -> list[dict[str, Any]]:
         cur.execute(ROLLING_ACCURACY_SQL, {"days": days})
         cols = [c.name for c in (cur.description or [])]
         return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
+
+
+def resolved_forecasts(
+    dsn: str, *, model: str | None = None, days: int = 3650
+) -> list[dict[str, Any]]:
+    """Resolved forecasts (point + 95% interval + realized value) for calibration.
+
+    Returns one dict per (series, horizon, ds) with a matching actual, newest
+    first, optionally filtered to a single ``model``.
+    """
+    import psycopg
+
+    from prophet.monitoring.schema import RESOLVED_FORECASTS_SQL
+
+    with psycopg.connect(dsn, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(RESOLVED_FORECASTS_SQL, {"days": days, "model": model})
+        cols = [c.name for c in (cur.description or [])]
+        return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]

@@ -129,6 +129,15 @@ See `ROADMAP.md` for full phase breakdown with acceptance and kill criteria.
 | 5 | Done | Applied domain — portfolio market data; volume forecastable (~12% over naive), prices a random walk ([results](docs/phase-5-market-results.md)) |
 | 6 | Code-complete | Productionize — real `/forecast` with intervals + drift monitoring; deploy + 30-day accuracy pending ([results](docs/phase-6-results.md)) |
 
+## Calibration
+
+Prophet scores forecasts against outcomes, so confidence here is empirically
+**calibrated**, not decorative: reliability curves, ECE / Brier / log score per
+model·series·horizon, a drift detector that flags a model that *was* calibrated
+and stopped, and the four-criteria forecastability gate as code. Persists to
+MLflow; served at `GET /calibration/{model}` and `GET /calibration/drift`. See
+[docs/calibration.md](docs/calibration.md).
+
 ---
 
 ## Contributing

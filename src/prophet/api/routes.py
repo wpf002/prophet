@@ -136,6 +136,41 @@ class ModelsResponse(BaseModel):
     models: list[ModelSummary]
 
 
+class CalibrationReport(BaseModel):
+    """Calibration of one (model, series, horizon) group against outcomes."""
+
+    model: str | None = None
+    series_id: str | None = None
+    horizon: int | None = None
+    level: int | None = None
+    n: int
+    coverage: float | None = None  # raw fraction inside the stated interval
+    ece: float | None = None  # expected calibration error (0 = perfect)
+    brier: float | None = None
+    log_score: float | None = None
+    basis: str | None = None  # empirical | model_derived | assumed
+    evidence_count: int | None = None
+    independence_score: float | None = None
+    effective_evidence: float | None = None
+    reliability: list[tuple[float, float]] = Field(default_factory=list)
+    drifted: bool | None = None
+    regressed_from_good: bool | None = None
+    last_calibrated: str | None = None
+
+
+class CalibrationResponse(BaseModel):
+    """Latest calibration per series/horizon for a model."""
+
+    model: str
+    reports: list[CalibrationReport]
+
+
+class CalibrationDriftResponse(BaseModel):
+    """Calibration groups currently flagged as drifted (was calibrated, no longer)."""
+
+    drifted: list[CalibrationReport]
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Liveness probe."""
@@ -153,6 +188,32 @@ async def models() -> ModelsResponse:
         default=settings.production_model,
         models=[ModelSummary(**m) for m in list_production_models()],
     )
+
+
+@router.get("/calibration/drift", response_model=CalibrationDriftResponse)
+async def calibration_drift_route(model: str | None = None) -> CalibrationDriftResponse:
+    """Calibration groups currently drifted — a model that was calibrated and
+    stopped being so. Optionally filter to one ``model``."""
+    from prophet.calibration.service import drifted_calibrations
+
+    return CalibrationDriftResponse(
+        drifted=[CalibrationReport(**r) for r in drifted_calibrations(model)]
+    )
+
+
+@router.get("/calibration/{model}", response_model=CalibrationResponse)
+async def calibration_route(model: str) -> CalibrationResponse:
+    """Latest calibration per series/horizon for a model (reliability, ECE,
+    Brier, log score, coverage, structured confidence)."""
+    from prophet.calibration.service import latest_calibration
+
+    reports = latest_calibration(model)
+    if not reports:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No calibration recorded for model '{model}'.",
+        )
+    return CalibrationResponse(model=model, reports=[CalibrationReport(**r) for r in reports])
 
 
 @router.post("/forecast/adhoc", response_model=AdhocForecastResponse)

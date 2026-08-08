@@ -37,6 +37,12 @@ class Settings(BaseSettings):
         default="prophet-benchmarks",
         validation_alias="MLFLOW_EXPERIMENT_NAME",
     )
+    # Calibration records live in the SAME MLflow store (no parallel store) but a
+    # dedicated experiment, so they're queryable apart from benchmark runs.
+    mlflow_calibration_experiment: str = Field(
+        default="prophet-calibration",
+        validation_alias="MLFLOW_CALIBRATION_EXPERIMENT",
+    )
 
     # API
     api_host: str = Field(default="0.0.0.0")

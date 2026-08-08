@@ -35,6 +35,14 @@ if [[ ! -f "models/production/macro/metadata.json" ]]; then
     || echo "[entrypoint] macro build failed (non-fatal) — continuing."
 fi
 
+# Seed macro calibration (backtest) so GET /calibration/macro has data on boot,
+# before live actuals have accrued. Non-fatal.
+if [[ -f "data/raw/domains/macro-train.parquet" ]]; then
+  echo "[entrypoint] Seeding macro calibration (backtest)..."
+  python scripts/calibrate_macro.py --backtest \
+    || echo "[entrypoint] calibration seed skipped (non-fatal) — continuing."
+fi
+
 PORT="${PORT:-8000}"
 echo "[entrypoint] Serving on 0.0.0.0:${PORT}"
 exec uvicorn prophet.api.main:app --host 0.0.0.0 --port "${PORT}"

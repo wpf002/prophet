@@ -52,6 +52,21 @@ ORDER BY f.series_id;
 """
 
 
+# Resolved forecasts (point + 95% interval joined to the realized value) for
+# calibration. Only rows with an interval and a matching actual, newest first.
+RESOLVED_FORECASTS_SQL = """
+SELECT
+    f.model, f.series_id, f.ds, f.horizon,
+    f.y_hat, f.y_lo_95, f.y_hi_95, a.y AS actual
+FROM forecasts f
+JOIN actuals a ON a.series_id = f.series_id AND a.ds = f.ds
+WHERE f.y_lo_95 IS NOT NULL AND f.y_hi_95 IS NOT NULL
+  AND a.ds >= now() - (%(days)s || ' days')::interval
+  AND (%(model)s IS NULL OR f.model = %(model)s)
+ORDER BY f.series_id, f.horizon, f.ds;
+"""
+
+
 def create_monitoring_tables(conn: Any) -> None:
     """Create the forecasts/actuals tables (idempotent). conn is a psycopg connection."""
     with conn.cursor() as cur:
