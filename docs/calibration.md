@@ -84,24 +84,29 @@ known-good baseline, or from `PROPHET_MONITOR_DSN`).
 
 ## Reading the outputs — the macro baseline
 
-Backtesting the known-good macro model (AutoETS, MASE 0.169 vs naive 0.740):
+Backtesting the known-good macro model (AutoETS, MASE 0.169 vs naive 0.740;
+24 non-overlapping windows, pooled over horizons):
 
 ```
 series     n   coverage  ece    brier
-CPIAUCSL  120   0.86     0.066  0.213
-PCEPI     120   0.79     0.074  0.218
-RSAFS     120   0.88     0.112  0.183
-TOTALSA   120   0.81     0.140  0.233
-UNRATE    120   0.88     0.209  0.243
+CPIAUCSL  288   0.86     0.060  0.211
+PCEPI     288   0.86     0.058  0.206
+RSAFS     288   0.91     0.078  0.190
+TOTALSA   288   0.88     0.120  0.210
+UNRATE    288   0.93     0.164  0.207
 ```
 
-Read it: the 95% intervals actually cover ~79–88% — the macro model is **mildly
+Read it: the 95% intervals actually cover ~86–93% — the macro model is **mildly
 overconfident** (a known property of ETS *analytic* intervals, which ignore
 parameter uncertainty; the served model's *conformal* intervals are tighter to
-nominal). Low ECE (CPI/PCE ~0.07) = well calibrated; higher ECE (UNRATE ~0.21) =
-watch it. None drifted across the backtest — a stable model. This is what the
-module is for: not "confidence: high", but "your 95% is really 86%, here's the
-curve, and it hasn't degraded."
+nominal). Low ECE (CPI/PCE ~0.06) = well calibrated; higher ECE (UNRATE ~0.16) =
+watch it. None drifted across the backtest — a stable model.
+
+With 24 windows each (series, horizon) group carries 24 independent resolved
+outcomes, so `basis` is `empirical` — the calibration is established from real
+comparisons, not the model's own claim. This is what the module is for: not
+"confidence: high", but "your 95% is really 88%, established on 24 outcomes,
+here's the curve, and it hasn't degraded."
 
 Deliberately **not** here: Dempster-Shafer, imprecise probabilities, belief
 functions, epistemic-status vectors. Empirical calibration is possible, so that's

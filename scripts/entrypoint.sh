@@ -36,10 +36,11 @@ if [[ ! -f "models/production/macro/metadata.json" ]]; then
 fi
 
 # Seed macro calibration (backtest) so GET /calibration/macro has data on boot,
-# before live actuals have accrued. Non-fatal.
+# before live actuals have accrued. 24 non-overlapping windows give each
+# (series, horizon) enough independent evidence for an empirical basis. Non-fatal.
 if [[ -f "data/raw/domains/macro-train.parquet" ]]; then
   echo "[entrypoint] Seeding macro calibration (backtest)..."
-  python scripts/calibrate_macro.py --backtest \
+  python scripts/calibrate_macro.py --backtest --n-windows 24 \
     || echo "[entrypoint] calibration seed skipped (non-fatal) — continuing."
 fi
 

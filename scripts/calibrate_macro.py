@@ -79,7 +79,7 @@ def _backtest_records(n_windows: int) -> list[CalibrationRecord]:
 @app.command()
 def main(
     backtest: bool = typer.Option(False, help="Backtest AutoETS locally instead of the monitor DB."),
-    n_windows: int = typer.Option(10, help="CV windows for --backtest."),
+    n_windows: int = typer.Option(24, help="CV windows for --backtest (>=24 → empirical basis)."),
     min_group: int = typer.Option(8, help="Minimum resolved records per (series, horizon)."),
 ) -> None:
     """Compute + log macro calibration; print a per-series validation readout."""
